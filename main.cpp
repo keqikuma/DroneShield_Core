@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 
     QTimer::singleShot(3000, systemCore, [systemCore](){
         // 假设用户想把无人机诱骗到 经纬度 (40.0, 116.0)
-        systemCore->startSpoofing(0, 40.0, 116.0);
+        systemCore->startSpoofing(40.0, 116.0);
     });
 
     // 3. 模拟前端操作：8秒后停止诱骗

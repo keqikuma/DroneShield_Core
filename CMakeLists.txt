@@ -28,7 +28,7 @@ qt_add_executable(DroneShield_Core
 
     # --- HAL 层 (硬件通信) ---
     # 全部改为小写文件名，匹配你的描述
-    src/Backend/HAL/tcpclient.h          src/Backend/HAL/tcpclient.cpp
+    # src/Backend/HAL/tcpclient.h          src/Backend/HAL/tcpclient.cpp
     src/Backend/HAL/udpsender.h          src/Backend/HAL/udpsender.cpp
 
     # --- Drivers 层 (协议驱动) ---

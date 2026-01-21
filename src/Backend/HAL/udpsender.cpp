@@ -66,49 +66,43 @@ void UdpSender::sendCommand(const QString &encode, const QJsonObject &json)
 
 void UdpSender::onReadyRead()
 {
-    // 循环读取所有挂起的数据报
     while (m_socket->hasPendingDatagrams()) {
         QNetworkDatagram datagram = m_socket->receiveDatagram();
         QByteArray data = datagram.data();
 
-        // 容错处理：数据太短直接忽略
-        if (data.length() < 2) return;
-
-        // 解析逻辑
-        // Node.js 代码参考: JSON.parse(str.substring(9))
-        // 这意味着真实硬件回传的数据，前面也有 9 字节的头 (FF + Len + Code)
-
+        // 1. 提取协议内容 (去除 FF...Header)
         QByteArray jsonBytes;
+        QString code = "";
 
-        // 尝试判断是否包含协议头
         if (data.startsWith("FF") && data.length() > 9) {
-            // 情况 A: 包含完整协议头，截取后 9 位之后的数据
+            code = data.mid(6, 3); // 获取指令码 (例如 "600")
             jsonBytes = data.mid(9);
         } else {
-            // 情况 B: 可能是纯 JSON (Python 模拟器偷懒可能只发了 JSON)
+            // 兼容纯 JSON 模式
             jsonBytes = data;
         }
 
-        // 解析 JSON
-        QJsonParseError error;
-        QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &error);
-
-        if (error.error == QJsonParseError::NoError && doc.isObject()) {
+        // 2. 解析 JSON
+        QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
+        if (doc.isObject()) {
             QJsonObject obj = doc.object();
 
-            // 提取关键字段 iState
-            // iState: 1 = 开启/工作中, 0 = 停止/空闲
-            if (obj.contains("iState")) {
-                bool isSpoofing = (obj["iState"].toInt() == 1);
+            // 如果是 600 (状态上报)，发出完整数据供上层处理
+            // Node.js 中是判断 if (lastThree == "600")
+            if (code == "600" || obj.contains("iSysSta")) {
+                // 1. 发送旧的心跳信号（保持兼容）
+                bool isWorking = (obj["iSysSta"].toInt() >= 3);
+                emit heartbeatReceived(true, isWorking);
 
-                // 发出信号通知 DeviceManager
-                // 参数1: isOnline (收到包就说明在线), 参数2: isSpoofing
-                emit heartbeatReceived(true, isSpoofing);
-
-                // qDebug() << "[UDP] 收到状态反馈 -> 在线, 诱骗中:" << isSpoofing;
+                // 2. 【新增】发送完整数据给驱动层做逻辑判断 (对应 PDF 3.1)
+                emit statusDataReceived(obj);
             }
-        } else {
-            // qDebug() << "[UDP] 解析JSON失败:" << error.errorString() << "原始数据:" << data;
+
+            // 处理命令反馈 (651, 652 等)
+            if (obj.contains("iState")) {
+                // 命令执行结果反馈
+                // qDebug() << "[UDP] 命令反馈:" << code << "结果:" << obj["iState"].toInt();
+            }
         }
     }
 }

@@ -8,7 +8,7 @@
 #define SPOOFDRIVER_H
 
 #include <QObject>
-#include "../HAL/tcpclient.h"
+#include <QMap>
 #include "../HAL/udpsender.h"
 
 class SpoofDriver : public QObject
@@ -17,40 +17,59 @@ class SpoofDriver : public QObject
 public:
     explicit SpoofDriver(QObject *parent = nullptr);
 
-    // ================= 业务接口 =================
-    // 1. 基础诱骗 (定点)
-    void startSpoofing(int type, double lat, double lon);
+    // ==========================================
+    // 核心业务接口
+    // ==========================================
 
-    // 2. 停止诱骗
+    /**
+     * @brief 启动诱骗 (综合流程)
+     * 会依次发送: 登录 -> 位置 -> 默认参数 -> 开启
+     */
+    void startSpoofing(double lat, double lon, double alt = 100.0);
+
+    /**
+     * @brief 停止诱骗
+     * 发送 602 关闭指令
+     */
     void stopSpoofing();
 
-    // 3. 动态调整 (未实现 -> 现已补全)
-    // 设置直线驱离 (角度 0-360)
-    void setLinearSpoofing(double angle);
+    // ==========================================
+    // 细分指令集 (对应 PDF 文档)
+    // ==========================================
 
-    // 设置圆周驱离 (半径, 周期)
-    void setCircularSpoofing(double radius, double cycle);
+    // [PDF 3.15] 登录/更新接收端信息 (619)
+    void sendLogin();
+
+    // [PDF 3.4] 设置功率衰减 (603)
+    // type: 1=GPS_L1CA, 2=BDS_B1I ...
+    void setAttenuation(int type, float value);
+
+    // [PDF 3.5] 设置通道时延 (604)
+    void setDelay(int type, float ns);
+
+    // [PDF 3.9] 设置直线运动/初速度 (608)
+    void setLinearMotion(float speed, float angle);
+
+    // [PDF 3.11] 设置圆周运动 (610)
+    void setCircularMotion(float radius, float cycle, int direction = 0);
+
+    // [PDF 3.13] 设置系统时间 (613)
+    void setSystemTime();
+
+signals:
+    // 上报设备状态 (解析 600 报文后发出)
+    // isLocked: 晶振是否锁定 (iOcxoSta == 3)
+    // isReady: 系统是否就绪 (iSysSta >= 3)
+    void deviceStatusUpdated(bool isLocked, bool isReady);
 
 private:
-    TcpClient *m_rfClient;
     UdpSender *m_udpSender;
 
-    // ================= TCP 硬件控制 (完全复刻 tcp.js) =================
-    void configureRfBoard(int type); // 流程总管
+    // 内部辅助：通道名称映射 (1 -> "GPS_L1CA")
+    // 参考 udp.js 中的 channelName 对象
+    QString getChannelName(int type);
 
-    void sendFreq(int type);         // 0x01: 设置频率
-    void sendTimeSlot(int slot);     // 0x05: 设置时隙
-    void sendModule(int mode);       // 0x0C: 设置模组
-    void sendAttenuation(int v1, int v2); // 0x02: 设置衰减
-    void sendWaveFile(int type);     // 0x09: 下发文件
-
-    // 通用协议封装 EB 90 ...
-    void sendEb90Cmd(quint8 cmdCode, const QByteArray &payload);
-
-    // ================= UDP 策略控制 (完全复刻 udp.js) =================
-    void sendStrategy(double lat, double lon); // 601 + 602
-
-    // 发送 UDP 包辅助
+    // 通用 UDP 发送辅助
     void sendUdpCmd(const QString &code, const QJsonObject &json);
 };
 

@@ -24,6 +24,7 @@ signals:
     // 当收到设备心跳时，发出此信号
     // isOnline: 设备是否在线, isSpoofing: 是否正在诱骗
     void heartbeatReceived(bool isOnline, bool isSpoofing);
+    void statusDataReceived(QJsonObject data);
 
 private slots:
     void onReadyRead();
