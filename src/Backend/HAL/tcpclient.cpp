@@ -52,14 +52,29 @@ void TcpClient::sendFile(const QString &filePath)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "[TCP] 无法读取文件:" << filePath;
+        qWarning() << "[TCP] ❌ 无法读取文件:" << filePath;
         return;
     }
 
-    QByteArray fileData = file.readAll();
-    // 这里需要根据协议补充发送文件长度的头指令 (... 0A 09 [Size] ...)
-    // 暂时略过协议封装，只做基础发送
-    sendCommand(fileData);
+    QByteArray fileContent = file.readAll();
+    qint64 size = fileContent.size();
+    // 大小单位转换：参考 tcp.js -> size = filesize / 1024 / 8;
+    // 注意：这里需要确认 Node.js 代码里的单位。
+    // tcp.js: const size = filesize / 1024 / 8;
+    // 如果文件很大，这里要小心。假设我们发的是模拟的小文件。
+
+    // 我们先不在这里发头，改为由 SpoofDriver 拼装好头(sendProtocolHeader)，
+    // 然后调用 sendCommand 发送，最后再调用这个 sendRawData 发送文件体。
+    // 为了灵活性，我们将 sendFile 拆解。
+
+    // 但为了完全复刻 node.js 的 sendfile 函数的封装性：
+    // 我们在 SpoofDriver 里拼协议，这里只管发二进制流。
+
+    if (m_socket->state() == QAbstractSocket::ConnectedState) {
+        qDebug() << "[TCP] 开始发送文件流，大小:" << size;
+        m_socket->write(fileContent);
+        m_socket->flush();
+    }
 }
 
 bool TcpClient::isConnected() const

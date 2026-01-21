@@ -20,6 +20,14 @@ public:
     // 发送标准诱骗指令包
     void sendCommand(const QString &encode, const QJsonObject &json);
 
+signals:
+    // 当收到设备心跳时，发出此信号
+    // isOnline: 设备是否在线, isSpoofing: 是否正在诱骗
+    void heartbeatReceived(bool isOnline, bool isSpoofing);
+
+private slots:
+    void onReadyRead();
+
 private:
     QUdpSocket *m_socket;
 };
