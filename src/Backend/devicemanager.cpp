@@ -1,13 +1,23 @@
 #include "devicemanager.h"
+#include "../Utils/configloader.h"
 
 DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
 {
     qDebug() << "[DeviceManager] 系统初始化中...";
-    m_spoofDriver = new SpoofDriver(this);
+
+    // 1. 读取配置文件
+    ConfigLoader config;
+    QString spoofIp = config.getSpoofIp();
+    int spoofPort = config.getSpoofPort();
+
+    // 2. 使用配置初始化驱动
+    // 传入读取到的 IP 和 Port
+    m_spoofDriver = new SpoofDriver(spoofIp, spoofPort, this);
 }
 
 DeviceManager::~DeviceManager()
 {
+    // 即使这里什么都不做，也必须写出来，否则编译报错
 }
 
 void DeviceManager::startSpoofing(double lat, double lon, double alt)

@@ -12,35 +12,26 @@
 #include <QHostAddress>
 #include <QNetworkInterface>
 
-SpoofDriver::SpoofDriver(QObject *parent) : QObject(parent)
+SpoofDriver::SpoofDriver(const QString &hostIp, int hostPort, QObject *parent)
+    : QObject(parent)
 {
     m_udpSender = new UdpSender(this);
 
-    // 监听 UDP 回包 (特别是 600 状态包)
-    // 注意：这里使用了上一轮建议你修改 udpsender.cpp 后应有的 statusDataReceived 信号
-    // 如果还没改 udpsender.cpp，请务必把那个 emit statusDataReceived(obj) 加回去！
+    // 设置 UDP 目标地址
+    m_udpSender->setTarget(hostIp, hostPort);
+
     connect(m_udpSender, &UdpSender::statusDataReceived, this,
             [this](QJsonObject data){
-                // 解析 600 报文 (PDF 3.1)
+                // ... (保持原有的状态解析逻辑) ...
                 if (data.contains("iOcxoSta") && data.contains("iSysSta")) {
-                    int ocxo = data["iOcxoSta"].toInt(); // 3=锁定
-                    int sys  = data["iSysSta"].toInt();  // 3=就绪
-
+                    int ocxo = data["iOcxoSta"].toInt();
+                    int sys  = data["iSysSta"].toInt();
                     bool isLocked = (ocxo == 3);
                     bool isReady  = (sys >= 3);
-
-                    static bool lastLocked = false;
-                    if (isLocked != lastLocked) {
-                        qDebug() << "[SpoofDriver] 晶振锁定状态变更:" << isLocked;
-                        lastLocked = isLocked;
-                    }
-
                     emit deviceStatusUpdated(isLocked, isReady);
                 }
             });
 
-    // 初始化时尝试发送一次登录指令 (PDF 3.15)
-    // 这对于某些设备是必须的，否则它不知道往哪里回传数据
     sendLogin();
 }
 
@@ -50,12 +41,11 @@ SpoofDriver::SpoofDriver(QObject *parent) : QObject(parent)
 
 void SpoofDriver::startSpoofing(double lat, double lon, double alt)
 {
-    qDebug() << ">>> [SpoofDriver] 启动诱骗 (UDP Only)";
+    qDebug() << ">>> [SpoofDriver] 启动诱骗 (全协议版)";
 
-    // 1. 确保登录 (619)
     sendLogin();
 
-    // 2. 设置位置 (601) [PDF 3.2]
+    // 1. 设置位置 (601)
     QJsonObject pos;
     pos["sKey"] = Config::LURE_SKEY;
     pos["dbLon"] = lon;
@@ -63,15 +53,15 @@ void SpoofDriver::startSpoofing(double lat, double lon, double alt)
     pos["dbAlt"] = alt;
     sendUdpCmd("601", pos);
 
-    // 3. (可选) 设置一些默认参数，例如时延和功率
-    // 根据 Node.js setmodele(3) 的逻辑，这里可以预设一些值
-    // setDelay(1, 1000); // 示例
+    // 2. 默认参数设置 (建议流程)
+    setDelay(0, 1000 * 3.3); // 默认距离时延
+    setAttenuation(0, 10.0); // 默认衰减
+    setLinearMotion(15.0, 0.0); // 默认运动模式
 
-    // 4. 开启发射开关 (602) [PDF 3.3]
+    // 3. 开启发射 (602)
     QJsonObject sw;
     sw["sKey"] = Config::LURE_SKEY;
-    sw["iSwitch"] = 1; // 1=开
-    // iBkType 不传则默认全开
+    sw["iSwitch"] = 1;
     sendUdpCmd("602", sw);
 }
 
@@ -79,44 +69,89 @@ void SpoofDriver::stopSpoofing()
 {
     qDebug() << "<<< [SpoofDriver] 停止诱骗";
 
-    // 关闭发射开关 (602)
     QJsonObject sw;
     sw["sKey"] = Config::LURE_SKEY;
-    sw["iSwitch"] = 0; // 0=关
+    sw["iSwitch"] = 0;
     sendUdpCmd("602", sw);
 }
 
 // =================================================================
-// 细分指令集实现
+// 完整指令集实现
 // =================================================================
 
-void SpoofDriver::sendLogin()
+// 辅助：获取本机IP
+QString SpoofDriver::getLocalIP()
 {
-    // [PDF 3.15] 命令 619
-    QJsonObject json;
-    json["sKey"] = Config::LURE_SKEY;
-
-    // 获取本机 IP (简单实现，取第一个非本地 IP)
     QString localIp = "127.0.0.1";
+#ifdef SIMULATION_MODE
+    return localIp;
+#else
     const QHostAddress &localhost = QHostAddress(QHostAddress::LocalHost);
     for (const QHostAddress &address : QNetworkInterface::allAddresses()) {
         if (address.protocol() == QAbstractSocket::IPv4Protocol && address != localhost)
             localIp = address.toString();
     }
-
-#ifdef SIMULATION_MODE
-    localIp = "127.0.0.1";
+    return localIp;
 #endif
+}
 
-    json["sIP"] = localIp;
-    json["iPort"] = 9098; // 控制端接收端口 (PDF 表1)
-
+void SpoofDriver::sendLogin()
+{
+    // 619 登录
+    QJsonObject json;
+    json["sKey"] = Config::LURE_SKEY;
+    json["sIP"] = getLocalIP();
+    json["iPort"] = 9098;
     sendUdpCmd("619", json);
 }
 
+void SpoofDriver::sendLogout()
+{
+    // 620 注销
+    QJsonObject json;
+    json["sKey"] = Config::LURE_SKEY;
+    json["sIP"] = getLocalIP();
+    json["iPort"] = 9098;
+    sendUdpCmd("620", json);
+}
+
+void SpoofDriver::rebootDevice()
+{
+    // 605 重启设备
+    QJsonObject json;
+    json["sKey"] = Config::LURE_SKEY;
+    json["sReboot"] = "REBOOT";
+    sendUdpCmd("605", json);
+}
+
+void SpoofDriver::setHeartbeatCycle(int cycle)
+{
+    // 615 设置心跳周期
+    QJsonObject json;
+    json["sKey"] = Config::LURE_SKEY;
+    json["iCycle"] = cycle; // 2-30秒
+    sendUdpCmd("615", json);
+}
+
+void SpoofDriver::setSystemTime()
+{
+    // 613 同步时间
+    QDateTime now = QDateTime::currentDateTimeUtc();
+    QJsonObject json;
+    json["sKey"] = Config::LURE_SKEY;
+    json["iYear"] = now.date().year();
+    json["iMonth"] = now.date().month();
+    json["iDay"] = now.date().day();
+    json["iHour"] = now.time().hour();
+    json["iMin"] = now.time().minute();
+    json["iSec"] = now.time().second();
+    sendUdpCmd("613", json);
+}
+
+// --- 诱骗参数 ---
+
 QString SpoofDriver::getChannelName(int type)
 {
-    // 映射表参考 udp.js line 22-36
     static QMap<int, QString> map = {
         {1, "GPS_L1CA"}, {2, "BDS_B1I"}, {3, "GLO_L1"}, {4, "GAL_E1"},
         {5, "BDS_B2I"},  {6, "BDS_B3I"}, {7, "BDS_B1C"}, {8, "GPS_L2C"},
@@ -128,68 +163,82 @@ QString SpoofDriver::getChannelName(int type)
 
 void SpoofDriver::setAttenuation(int type, float value)
 {
-    // [PDF 3.4] 命令 603
+    // 603 功率衰减
     QString chName = getChannelName(type);
     if(chName == "Unknown") return;
-
     QJsonObject json;
     json["sKey"] = Config::LURE_SKEY;
     json["iType"] = type;
-    // 动态 key: fAttenGPS_L1CA (参考 udp.js line 170)
     json["fAtten" + chName] = value;
-
     sendUdpCmd("603", json);
 }
 
 void SpoofDriver::setDelay(int type, float ns)
 {
-    // [PDF 3.5] 命令 604
+    // 604 通道时延
     QString chName = getChannelName(type);
     if(chName == "Unknown") return;
-
     QJsonObject json;
     json["sKey"] = Config::LURE_SKEY;
     json["iType"] = type;
-    // 动态 key: fDelayGPS_L1CA (参考 udp.js line 185)
     json["fDelay" + chName] = ns;
-
     sendUdpCmd("604", json);
 }
 
+// --- 运动控制 ---
+
 void SpoofDriver::setLinearMotion(float speed, float angle)
 {
-    // [PDF 3.9] 命令 608
+    // 608 初速度
     QJsonObject json;
     json["sKey"] = Config::LURE_SKEY;
-    json["fInitSpeedVal"] = speed;   // m/s
-    json["fInitSpeedHead"] = angle;  // 度
+    json["fInitSpeedVal"] = speed;
+    json["fInitSpeedHead"] = angle;
     sendUdpCmd("608", json);
+}
+
+void SpoofDriver::setAcceleration(float acc, float angle)
+{
+    // 609 加速度
+    QJsonObject json;
+    json["sKey"] = Config::LURE_SKEY;
+    json["fAccSpeedVal"] = acc;   // m/s^2
+    json["fAccSpeedHead"] = angle; // 度
+    sendUdpCmd("609", json);
 }
 
 void SpoofDriver::setCircularMotion(float radius, float cycle, int direction)
 {
-    // [PDF 3.11] 命令 610
+    // 610 圆周运动
     QJsonObject json;
     json["sKey"] = Config::LURE_SKEY;
-    json["fCirRadius"] = radius;     // 半径 m
-    json["fCirCycle"] = cycle;       // 周期 s
-    json["iCirRotDir"] = direction;  // 0顺 1逆
+    json["fCirRadius"] = radius;
+    json["fCirCycle"] = cycle;
+    json["iCirRotDir"] = direction;
     sendUdpCmd("610", json);
 }
 
-void SpoofDriver::setSystemTime()
+// --- 区域控制 ---
+
+void SpoofDriver::setNoFlyZone(int id, double lat, double lon, int alt)
 {
-    // [PDF 3.13] 命令 613
-    QDateTime now = QDateTime::currentDateTimeUtc();
+    // 705 设置禁飞区
     QJsonObject json;
     json["sKey"] = Config::LURE_SKEY;
-    json["iYear"] = now.date().year();
-    json["iMonth"] = now.date().month();
-    json["iDay"] = now.date().day();
-    json["iHour"] = now.time().hour();
-    json["iMin"] = now.time().minute();
-    json["iSec"] = now.time().second();
-    sendUdpCmd("613", json);
+    json["iNum"] = id;  // 0-9
+    json["dbLon"] = lon;
+    json["dbLat"] = lat;
+    json["iAlt"] = alt; // PDF要求是 Int32
+    sendUdpCmd("705", json);
+}
+
+void SpoofDriver::queryNoFlyZone()
+{
+    // 802 查询禁飞区
+    QJsonObject json;
+    json["sKey"] = Config::LURE_SKEY;
+    json["sNoFly"] = "NoFlyZone";
+    sendUdpCmd("802", json);
 }
 
 void SpoofDriver::sendUdpCmd(const QString &code, const QJsonObject &json)

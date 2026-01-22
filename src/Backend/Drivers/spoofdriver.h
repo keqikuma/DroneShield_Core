@@ -1,9 +1,3 @@
-/**
- *  spoofdriver.h
- *      Created on: 2026年1月21日
- *          Author: rustinchen
- */
-
 #ifndef SPOOFDRIVER_H
 #define SPOOFDRIVER_H
 
@@ -15,62 +9,52 @@ class SpoofDriver : public QObject
 {
     Q_OBJECT
 public:
-    explicit SpoofDriver(QObject *parent = nullptr);
+    explicit SpoofDriver(const QString &hostIp, int hostPort, QObject *parent = nullptr);
 
     // ==========================================
     // 核心业务接口
     // ==========================================
 
-    /**
-     * @brief 启动诱骗 (综合流程)
-     * 会依次发送: 登录 -> 位置 -> 默认参数 -> 开启
-     */
+    // 启动/停止
     void startSpoofing(double lat, double lon, double alt = 100.0);
-
-    /**
-     * @brief 停止诱骗
-     * 发送 602 关闭指令
-     */
     void stopSpoofing();
 
     // ==========================================
-    // 细分指令集 (对应 PDF 文档)
+    // 完整指令集
     // ==========================================
 
-    // [PDF 3.15] 登录/更新接收端信息 (619)
-    void sendLogin();
+    // --- 基础配置 ---
+    void sendLogin();                           // 619 登录
+    void sendLogout();                          // 620 注销/断开
+    void rebootDevice();                        // 605 重启设备
+    void setHeartbeatCycle(int cycle);          // 615 设置心跳周期
+    void setSystemTime();                       // 613 同步时间
 
-    // [PDF 3.4] 设置功率衰减 (603)
-    // type: 1=GPS_L1CA, 2=BDS_B1I ...
-    void setAttenuation(int type, float value);
+    // --- 诱骗参数 ---
+    void setAttenuation(int type, float value); // 603 功率衰减
+    void setDelay(int type, float ns);          // 604 通道时延
 
-    // [PDF 3.5] 设置通道时延 (604)
-    void setDelay(int type, float ns);
+    // --- 运动控制 ---
+    void setLinearMotion(float speed, float angle); // 608 初速度
+    void setAcceleration(float acc, float angle);   // 609 加速度
+    void setCircularMotion(float radius, float cycle, int direction = 0); // 610 圆周
 
-    // [PDF 3.9] 设置直线运动/初速度 (608)
-    void setLinearMotion(float speed, float angle);
-
-    // [PDF 3.11] 设置圆周运动 (610)
-    void setCircularMotion(float radius, float cycle, int direction = 0);
-
-    // [PDF 3.13] 设置系统时间 (613)
-    void setSystemTime();
+    // --- 区域控制 ---
+    // id: 0-9, alt: 高度(米)
+    void setNoFlyZone(int id, double lat, double lon, int alt); // 705 设置禁飞区
+    void queryNoFlyZone();                                      // 802 查询禁飞区
 
 signals:
     // 上报设备状态 (解析 600 报文后发出)
-    // isLocked: 晶振是否锁定 (iOcxoSta == 3)
-    // isReady: 系统是否就绪 (iSysSta >= 3)
     void deviceStatusUpdated(bool isLocked, bool isReady);
 
 private:
     UdpSender *m_udpSender;
 
-    // 内部辅助：通道名称映射 (1 -> "GPS_L1CA")
-    // 参考 udp.js 中的 channelName 对象
+    // 内部辅助
     QString getChannelName(int type);
-
-    // 通用 UDP 发送辅助
     void sendUdpCmd(const QString &code, const QJsonObject &json);
+    QString getLocalIP(); // 辅助函数：获取本机IP
 };
 
 #endif // SPOOFDRIVER_H

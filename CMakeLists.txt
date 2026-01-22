@@ -39,6 +39,7 @@ qt_add_executable(DroneShield_Core
 
     # --- Utils 工具 ---
     src/Utils/crcutils.h                 src/Utils/crcutils.cpp
+    src/Utils/configloader.h src/Utils/configloader.cpp
 )
 
 target_link_libraries(DroneShield_Core

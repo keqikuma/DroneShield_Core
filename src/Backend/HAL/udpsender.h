@@ -17,12 +17,12 @@ class UdpSender : public QObject
 public:
     explicit UdpSender(QObject *parent = nullptr);
 
-    // 发送标准诱骗指令包
+    // 设置目标地址
+    void setTarget(const QString &ip, int port);
+
     void sendCommand(const QString &encode, const QJsonObject &json);
 
 signals:
-    // 当收到设备心跳时，发出此信号
-    // isOnline: 设备是否在线, isSpoofing: 是否正在诱骗
     void heartbeatReceived(bool isOnline, bool isSpoofing);
     void statusDataReceived(QJsonObject data);
 
@@ -31,6 +31,9 @@ private slots:
 
 private:
     QUdpSocket *m_socket;
+    // 目标地址成员变量
+    QString m_targetIp;
+    int m_targetPort;
 };
 
 #endif // UDPSENDER_H

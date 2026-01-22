@@ -1,8 +1,6 @@
 #include "mainwindow.h"
 #include <QApplication>
 #include <QTimer>
-
-// 引入大管家
 #include "src/Backend/devicemanager.h"
 
 int main(int argc, char *argv[])
@@ -11,21 +9,20 @@ int main(int argc, char *argv[])
     MainWindow w;
     w.show();
 
-    // === 业务启动流程 ===
-
     // 1. 创建核心控制器
+    // 此时它会在构造函数里读取 config.ini，如果不存在则创建
     DeviceManager *systemCore = new DeviceManager(&w);
 
-    // 2. 模拟前端操作：3秒后通过 DeviceManager 开启诱骗
-    qDebug() << "=== 等待 3 秒，模拟用户点击开启诱骗 ===";
-
+    // 2. 模拟操作：3秒后开启诱骗
+    qDebug() << "=== [TEST] 等待 3 秒，测试配置读取与发送 ===";
     QTimer::singleShot(3000, systemCore, [systemCore](){
-        // 假设用户想把无人机诱骗到 经纬度 (40.0, 116.0)
-        systemCore->startSpoofing(40.0, 116.0);
+        // 开启诱骗：经纬度 40, 116, 高度 100
+        // 这应该触发: 619(登录) -> 601(位置) -> 604/603/608(参数) -> 602(开启)
+        systemCore->startSpoofing(40.0, 116.0, 100.0);
     });
 
-    // 3. 模拟前端操作：8秒后停止诱骗
-    QTimer::singleShot(8000, systemCore, [systemCore](){
+    // 3. 模拟操作：6秒后停止
+    QTimer::singleShot(6000, systemCore, [systemCore](){
         systemCore->stopSpoofing();
     });
 
