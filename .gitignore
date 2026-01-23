@@ -97,3 +97,10 @@ CMakeUserPresets.json
 
 # 5. 如果你的波形文件(.dat)非常大(超过100MB)，建议取消下面这行的注释
 resources/waveforms/*.dat
+
+# ==========================
+# Python Virtual Environments (Python 虚拟环境)
+# ==========================
+venv/
+.venv/
+env/
