@@ -53,10 +53,17 @@ void SpoofDriver::startSpoofing(double lat, double lon, double alt)
     pos["dbAlt"] = alt;
     sendUdpCmd("601", pos);
 
-    // 2. 默认参数设置 (建议流程)
-    setDelay(0, 1000 * 3.3); // 默认距离时延
-    setAttenuation(0, 10.0); // 默认衰减
-    setLinearMotion(15.0, 0.0); // 默认运动模式
+    // 2. 默认参数设置
+    // 【修改】将 type 0 改为 1 (GPS_L1CA)，或者其他主要频段
+    // 这样 getChannelName(1) 就能返回正确字符串，指令就能发出去
+    setDelay(1, 1000 * 3.3);     // 设置 GPS L1 时延
+    setAttenuation(1, 10.0);     // 设置 GPS L1 衰减
+
+    // 如果需要设置其他频段，可以多写几行，或者写个循环
+    // setAttenuation(2, 10.0); // BDS B1I
+    // setAttenuation(3, 10.0); // GLO L1
+
+    setLinearMotion(15.0, 0.0);
 
     // 3. 开启发射 (602)
     QJsonObject sw;
