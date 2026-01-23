@@ -11,27 +11,26 @@ int main(int argc, char *argv[])
 
     DeviceManager *systemCore = new DeviceManager(&w);
 
-    qDebug() << "=== [TEST] 开始测试手动模式业务逻辑 ===";
+    qDebug() << "=== [TEST] 开始测试：自动模式 ===";
 
-    // 1. 3秒后开启诱骗 (基础启动)
-    QTimer::singleShot(3000, systemCore, [systemCore](){
-        systemCore->startSpoofing(40.0, 116.0);
+    // 1. 2秒后：切换到自动模式
+    QTimer::singleShot(2000, systemCore, [systemCore](){
+        systemCore->setSystemMode(SystemMode::Auto);
     });
 
-    // 2. 5秒后，模拟用户点击“向东驱离”
-    QTimer::singleShot(5000, systemCore, [systemCore](){
-        // 调用我们刚写的新接口
-        systemCore->setManualDirection(SpoofDirection::East);
+    // 2. 4秒后：模拟发现目标，距离 1500米 (应该触发圆周)
+    QTimer::singleShot(4000, systemCore, [systemCore](){
+        systemCore->updateDetection(true, 1500.0);
     });
 
-    // 3. 8秒后，模拟用户点击“圆周驱离”
-    QTimer::singleShot(8000, systemCore, [systemCore](){
-        systemCore->setManualCircular();
+    // 3. 7秒后：模拟目标逼近，距离 800米 (日志应提示进入红区，继续圆周)
+    QTimer::singleShot(7000, systemCore, [systemCore](){
+        systemCore->updateDetection(true, 800.0);
     });
 
-    // 4. 12秒停止
-    QTimer::singleShot(12000, systemCore, [systemCore](){
-        systemCore->stopSpoofing();
+    // 4. 10秒后：模拟目标消失 (应该停止诱骗)
+    QTimer::singleShot(10000, systemCore, [systemCore](){
+        systemCore->updateDetection(false, 0.0);
     });
 
     return a.exec();

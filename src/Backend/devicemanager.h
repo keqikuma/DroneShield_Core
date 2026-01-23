@@ -13,7 +13,7 @@ enum class SpoofDirection {
     West   // 西 (270度)
 };
 
-// 【新增】定义工作模式（为第三阶段自动模式做准备）
+// 定义工作模式
 enum class SystemMode {
     Manual, // 手动
     Auto    // 自动
@@ -45,9 +45,23 @@ public:
     // 切换系统模式 (手动/自动)
     void setSystemMode(SystemMode mode);
 
+    // ==========================================
+    // 自动模式核心接口
+    // ==========================================
+
+    /**
+     * @brief 模拟接收侦测数据 (在这个阶段我们手动调用它来模拟)
+     * @param hasDrone 是否发现无人机
+     * @param distance 目标距离 (米)
+     */
+    void updateDetection(bool hasDrone, double distance);
+
 private:
     SpoofDriver *m_spoofDriver;
     SystemMode m_currentMode; // 当前系统模式
+
+    // 记录自动模式下的运行状态，防止重复发送指令
+    bool m_isAutoSpoofingRunning;
 };
 
 #endif // DEVICEMANAGER_H
