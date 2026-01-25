@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 project(DroneShield_Core LANGUAGES CXX)
 
 # 1. 【关键修正】必须包含 Network 模块，否则 QTcpSocket/QUdpSocket 报错
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network WebSockets)
 
 qt_standard_project_setup()
 
@@ -40,6 +40,9 @@ qt_add_executable(DroneShield_Core
     # --- Utils 工具 ---
     src/Utils/crcutils.h                 src/Utils/crcutils.cpp
     src/Utils/configloader.h src/Utils/configloader.cpp
+    src/Backend/HAL/httpclient.h src/Backend/HAL/httpclient.cpp
+    src/Backend/HAL/socketioclient.h src/Backend/HAL/socketioclient.cpp
+    src/Backend/Drivers/detectiondriver.h src/Backend/Drivers/detectiondriver.cpp
 )
 
 target_link_libraries(DroneShield_Core
@@ -47,6 +50,7 @@ target_link_libraries(DroneShield_Core
         Qt::Core
         Qt::Widgets
         Qt::Network  # 3. 【关键修正】链接网络库
+        Qt::WebSockets
 )
 
 include(GNUInstallDirs)
