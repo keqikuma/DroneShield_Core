@@ -163,7 +163,7 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
     // 2. 情况A：目标消失
     if (!hasDrone) {
         if (m_isAutoSpoofingRunning || m_isJammingRunning) {
-            qDebug() << "[自动决策] 目标消失 -> 🛑 全系统停机";
+            qDebug() << "[自动决策] 目标消失 -> 全系统停机";
             stopSpoofing(); // 内部会同时停止诱骗和干扰
         }
         return;
@@ -171,7 +171,7 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
 
     // 3. 情况B：发现目标 -> 启动诱骗
     if (!m_isAutoSpoofingRunning) {
-        qDebug() << "[自动决策] 发现威胁 -> 🚀 启动诱骗防御";
+        qDebug() << "[自动决策] 发现威胁 -> 启动诱骗防御";
         startSpoofing(40.0, 116.0); // 启动基础诱骗
         m_isAutoSpoofingRunning = true;
     }
@@ -185,7 +185,7 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
     // 距离 <= 1000米：开启干扰 (Jamming)
     if (distance <= 1000.0) {
         if (!m_isJammingRunning) {
-            qDebug() << "[自动决策] !!! 进入红区 (<1000m) !!! -> 🔥 开启干扰压制";
+            qDebug() << "[自动决策] !!! 进入红区 (<1000m) !!! -> 开启干扰压制";
             if (m_jammerDriver) {
                 m_jammerDriver->setJamming(true);
             }
@@ -195,7 +195,7 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
     // 距离 > 1000米：关闭干扰 (只保留诱骗)
     else {
         if (m_isJammingRunning) {
-            qDebug() << "[自动决策] 目标离开红区 -> 🛑 停止干扰 (保持诱骗)";
+            qDebug() << "[自动决策] 目标离开红区 -> 停止干扰 (保持诱骗)";
             if (m_jammerDriver) {
                 m_jammerDriver->setJamming(false);
             }
