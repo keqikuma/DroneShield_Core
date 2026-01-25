@@ -4,8 +4,11 @@
 #include <QObject>
 #include <QDebug>
 #include "Drivers/spoofdriver.h"
+// 引入侦测和干扰驱动
+#include "Drivers/detectiondriver.h"
+#include "Drivers/jammerdriver.h"
 
-// 【新增】定义方向枚举
+// 定义方向枚举
 enum class SpoofDirection {
     North, // 北 (0度)
     East,  // 东 (90度)
@@ -35,20 +38,13 @@ public:
     // ==========================================
     // 手动模式业务接口
     // ==========================================
-
-    // 手动：开启圆周驱离
     void setManualCircular();
-
-    // 手动：开启定向驱离 (东/南/西/北)
     void setManualDirection(SpoofDirection dir);
-
-    // 切换系统模式 (手动/自动)
     void setSystemMode(SystemMode mode);
 
     // ==========================================
     // 自动模式核心接口
     // ==========================================
-
     /**
      * @brief 模拟接收侦测数据 (在这个阶段我们手动调用它来模拟)
      * @param hasDrone 是否发现无人机
@@ -56,12 +52,27 @@ public:
      */
     void updateDetection(bool hasDrone, double distance);
 
+private slots:
+    // 响应来自 DetectionDriver 的实时信号
+    void onRealTimeDroneDetected(const QList<DroneInfo> &drones);
+    void onRealTimeImageDetected(int count, const QString &desc);
+
+private:
+    // 内部核心决策逻辑
+    void processDecision(bool hasDrone, double distance);
+
 private:
     SpoofDriver *m_spoofDriver;
+
+    // 侦测与干扰驱动
+    DetectionDriver *m_detectionDriver;
+    JammerDriver *m_jammerDriver;
+
     SystemMode m_currentMode; // 当前系统模式
 
-    // 记录自动模式下的运行状态，防止重复发送指令
-    bool m_isAutoSpoofingRunning;
+    // 状态锁
+    bool m_isAutoSpoofingRunning; // 记录诱骗是否在运行
+    bool m_isJammingRunning;      // 记录干扰是否在运行
 };
 
 #endif // DEVICEMANAGER_H

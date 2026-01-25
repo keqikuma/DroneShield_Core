@@ -1,41 +1,71 @@
 #include "devicemanager.h"
 #include "../Utils/configloader.h"
+#include "../Consts.h"
 
 DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
 {
     qDebug() << "[DeviceManager] 系统初始化中...";
 
-    // 默认手动模式
     m_currentMode = SystemMode::Manual;
-
-    // 初始化自动模式状态锁
     m_isAutoSpoofingRunning = false;
+    m_isJammingRunning = false;
 
     ConfigLoader config;
-    // 使用配置初始化驱动
+
+    // 1. 初始化诱骗驱动 (UDP -> FPGA)
     m_spoofDriver = new SpoofDriver(config.getSpoofIp(), config.getSpoofPort(), this);
+
+    // 2. 初始化干扰/写频驱动 (HTTP -> Linux)
+    m_jammerDriver = new JammerDriver(this);
+    // 设置 Linux 主控板 IP
+    m_jammerDriver->setTarget(Config::LINUX_MAIN_IP, Config::LINUX_PORT);
+
+    // 3. 初始化侦测驱动 (SocketIO <- Linux)
+    m_detectionDriver = new DetectionDriver(this);
+
+    // 连接侦测信号 -> 业务槽函数
+    connect(m_detectionDriver, &DetectionDriver::droneDetected,
+            this, &DeviceManager::onRealTimeDroneDetected);
+    connect(m_detectionDriver, &DetectionDriver::imageDetected,
+            this, &DeviceManager::onRealTimeImageDetected);
+
+    // 4. 启动连接与初始化配置
+    // 连接侦测 WebSocket
+    m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, Config::LINUX_PORT);
+
+    // 预设干扰频率参数 (900-920MHz)
+    // 注意：这里只是配置参数，不会开启干扰
+    qDebug() << "[DeviceManager] 下发预设干扰频率参数...";
+    m_jammerDriver->setWriteFreq(900, 920);
 }
 
 DeviceManager::~DeviceManager()
 {
-    // Qt 对象树会自动回收子对象，此处无需手动 delete
+    // Qt 对象树会自动回收子对象
 }
 
 void DeviceManager::startSpoofing(double lat, double lon, double alt)
 {
     qDebug() << "[DeviceManager] 开启诱骗基础流程";
     if (m_spoofDriver) {
-        // 注意：这里只启动基础流程（登录、定点、开开关）
-        // 具体的运动模式（圆周/直线）由后续的手动/自动逻辑决定
         m_spoofDriver->startSpoofing(lat, lon, alt);
     }
 }
 
 void DeviceManager::stopSpoofing()
 {
-    qDebug() << "[DeviceManager] 停止诱骗";
+    qDebug() << "[DeviceManager] 停止业务 (诱骗 & 干扰)";
+
+    // 1. 停止诱骗
     if (m_spoofDriver) m_spoofDriver->stopSpoofing();
-    m_isAutoSpoofingRunning = false;    // 重置自动状态
+    m_isAutoSpoofingRunning = false;
+
+    // 2. 停止干扰 (如果在运行)
+    if (m_isJammingRunning && m_jammerDriver) {
+        qDebug() << "[DeviceManager] 联动停止干扰";
+        m_jammerDriver->setJamming(false);
+        m_isJammingRunning = false;
+    }
 }
 
 // =================================================================
@@ -49,8 +79,7 @@ void DeviceManager::setSystemMode(SystemMode mode)
     m_currentMode = mode;
     qDebug() << "[DeviceManager] 切换模式 ->" << (mode == SystemMode::Auto ? "自动" : "手动");
 
-    // 切换模式时，为了安全，建议先停止当前诱骗
-    // 防止手动模式的指令在自动模式下继续生效，反之亦然
+    // 切换模式时，为了安全，停止所有当前动作
     stopSpoofing();
 }
 
@@ -63,7 +92,6 @@ void DeviceManager::setManualCircular()
 
     qDebug() << "[手动业务] 执行圆周驱离";
     if (m_spoofDriver) {
-        // 战术参数：半径500米，周期60秒
         m_spoofDriver->setCircularMotion(500.0, 60.0);
     }
 }
@@ -78,80 +106,100 @@ void DeviceManager::setManualDirection(SpoofDirection dir)
     double angle = 0.0;
     QString dirName = "Unknown";
 
-    // 方向映射
     switch (dir) {
-    case SpoofDirection::North:
-        angle = 0.0;
-        dirName = "北";
-        break;
-    case SpoofDirection::East:
-        angle = 90.0;
-        dirName = "东";
-        break;
-    case SpoofDirection::South:
-        angle = 180.0;
-        dirName = "南";
-        break;
-    case SpoofDirection::West:
-        angle = 270.0;
-        dirName = "西";
-        break;
+    case SpoofDirection::North: angle = 0.0;   dirName = "北"; break;
+    case SpoofDirection::East:  angle = 90.0;  dirName = "东"; break;
+    case SpoofDirection::South: angle = 180.0; dirName = "南"; break;
+    case SpoofDirection::West:  angle = 270.0; dirName = "西"; break;
     }
 
-    qDebug() << "[手动业务] 执行定向驱离 -> 方向:" << dirName << "(角度:" << angle << ")";
+    qDebug() << "[手动业务] 执行定向驱离 -> 方向:" << dirName;
 
     if (m_spoofDriver) {
-        // 速度设为 15m/s (经验值，模拟无人机常规飞行速度)
         m_spoofDriver->setLinearMotion(15.0, angle);
     }
 }
 
 // =================================================================
-// 自动模式核心逻辑
+// 自动模式 / 实时侦测响应逻辑
 // =================================================================
 
-void DeviceManager::updateDetection(bool hasDrone, double distance)
+void DeviceManager::onRealTimeDroneDetected(const QList<DroneInfo> &drones)
 {
-    // 1. 如果不是自动模式，直接忽略侦测数据
-    if (m_currentMode != SystemMode::Auto) {
-        return;
+    // 只要列表不为空，就视为发现目标
+    bool hasDrone = !drones.isEmpty();
+    double distance = 0.0;
+
+    if (hasDrone) {
+        const DroneInfo &target = drones.first();
+        // TODO: 这里将来需要接入 GIS 计算实际距离
+        // 目前为了测试逻辑，我们假设如果有 ID，就是进入了 800米 (红区)
+        // 你可以根据 target.lat / target.lon 和基站坐标计算真实距离
+        distance = 800.0;
+
+        qDebug() << "[实时侦测] 锁定数传目标:" << target.model << "ID:" << target.id;
     }
 
-    // 2. 情况A：无人机消失
+    // 调用核心决策
+    processDecision(hasDrone, distance);
+}
+
+void DeviceManager::onRealTimeImageDetected(int count, const QString &desc)
+{
+    // 如果只有图传(穿越机)，没有数传
+    // 这里的 count > 0 也可以作为触发条件
+    if (count > 0) {
+        // qDebug() << "[实时侦测] 仅图传信号:" << desc;
+        // 可选：如果希望穿越机也触发打击，可以解开下面这行，并设定一个虚拟距离
+        // processDecision(true, 500.0);
+    }
+}
+
+void DeviceManager::processDecision(bool hasDrone, double distance)
+{
+    // 1. 如果不是自动模式，忽略
+    if (m_currentMode != SystemMode::Auto) return;
+
+    // 2. 情况A：目标消失
     if (!hasDrone) {
-        if (m_isAutoSpoofingRunning) {
-            qDebug() << "[自动决策] 目标消失 -> 停止诱骗";
-            stopSpoofing(); // 内部会重置 m_isAutoSpoofingRunning
+        if (m_isAutoSpoofingRunning || m_isJammingRunning) {
+            qDebug() << "[自动决策] 目标消失 -> 🛑 全系统停机";
+            stopSpoofing(); // 内部会同时停止诱骗和干扰
         }
         return;
     }
 
-    // 3. 情况B：发现无人机
-
-    // 状态机：如果还没开始诱骗，就启动基础流程
+    // 3. 情况B：发现目标 -> 启动诱骗
     if (!m_isAutoSpoofingRunning) {
-        qDebug() << "[自动决策] 侦测到目标，距离:" << distance << "米 -> 启动自动防御";
-        // 启动基础诱骗 (默认位置，后续可改为侦测到的无人机经纬度)
-        startSpoofing(40.0, 116.0);
+        qDebug() << "[自动决策] 发现威胁 -> 🚀 启动诱骗防御";
+        startSpoofing(40.0, 116.0); // 启动基础诱骗
         m_isAutoSpoofingRunning = true;
-    } else {
-        // 仅打印调试信息，避免刷屏
-        // qDebug() << "[自动决策] 目标持续追踪，距离:" << distance << "米";
     }
 
-    // 4. 执行战术决策
-    // 任务书要求：无论距离远近，诱骗设备都执行圆周驱离
+    // 4. 执行战术：始终保持圆周驱离
     if (m_spoofDriver) {
-        // 持续刷新圆周模式指令 (半径500m, 周期60s)
         m_spoofDriver->setCircularMotion(500.0, 60.0);
     }
 
-    // 5. 区域判断 (为未来压制设备预留接口)
+    // 5. 分级打击决策 (红区判断)
+    // 距离 <= 1000米：开启干扰 (Jamming)
     if (distance <= 1000.0) {
-        qDebug() << "[自动决策] !!! 进入红区 (<1000m) !!! -> 维持圆周 + (TODO: 开启压制)";
-        // TODO: m_jammerDriver->startJamming();
-    } else {
-        qDebug() << "[自动决策] 警戒区域 (>1000m) -> 维持圆周";
-        // TODO: m_jammerDriver->stopJamming();
+        if (!m_isJammingRunning) {
+            qDebug() << "[自动决策] !!! 进入红区 (<1000m) !!! -> 🔥 开启干扰压制";
+            if (m_jammerDriver) {
+                m_jammerDriver->setJamming(true);
+            }
+            m_isJammingRunning = true;
+        }
+    }
+    // 距离 > 1000米：关闭干扰 (只保留诱骗)
+    else {
+        if (m_isJammingRunning) {
+            qDebug() << "[自动决策] 目标离开红区 -> 🛑 停止干扰 (保持诱骗)";
+            if (m_jammerDriver) {
+                m_jammerDriver->setJamming(false);
+            }
+            m_isJammingRunning = false;
+        }
     }
 }
