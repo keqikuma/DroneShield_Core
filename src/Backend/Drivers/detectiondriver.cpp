@@ -2,6 +2,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QDebug>
+#include <utility>
 
 DetectionDriver::DetectionDriver(QObject *parent) : QObject(parent)
 {
@@ -27,15 +28,16 @@ void DetectionDriver::connectToDevice(const QString &ip, int port)
 
 void DetectionDriver::handleDroneStatus(const QJsonValue &data)
 {
-    // 解析 Python 里的 droneStatus
     QList<DroneInfo> droneList;
     if (data.isArray()) {
-        QJsonArray arr = data.toArray();
-        for (const auto &val : arr) {
-            QJsonObject obj = val.toObject();
-            QJsonObject info = obj["uav_info"].toObject(); // 注意这里的字段要和抓包一致
+        const QJsonArray arr = data.toArray();
 
-            // 如果 uav_info 为空，尝试从 trace 读取 (兼容穿越机逻辑)
+        // 使用 std::as_const(arr) 强行锁定为只读，消除警告
+        for (const auto &val : std::as_const(arr)) {
+            QJsonObject obj = val.toObject();
+            QJsonObject info = obj["uav_info"].toObject();
+
+            // 兼容穿越机逻辑
             if (info.isEmpty()) info = obj["trace"].toObject();
 
             DroneInfo d;

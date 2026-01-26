@@ -11,10 +11,11 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>DroneShield - 战术反制系统</string>
+   <string>江苏海创系统</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_Main">
+    
     <item row="0" column="0" rowspan="2">
      <widget class="QGroupBox" name="groupBox_Targets">
       <property name="title">
@@ -55,15 +56,15 @@
     <item row="0" column="1">
      <widget class="QGroupBox" name="groupBox_Radar">
       <property name="title">
-       <string>雷达态势 (RADAR VIEW)</string>
+       <string>雷达</string>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
         <widget class="QWidget" name="widgetRadar" native="true">
          <property name="minimumSize">
           <size>
-           <width>400</width>
-           <height>400</height>
+           <width>250</width>
+           <height>250</height>
           </size>
          </property>
          <property name="styleSheet">
@@ -84,7 +85,7 @@
        </size>
       </property>
       <property name="title">
-       <string>作战控制 (CONTROL)</string>
+       <string>作战控制</string>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_3">
        <item>
@@ -113,7 +114,7 @@
           </size>
          </property>
          <property name="text">
-          <string>🛡️ 自动接管模式</string>
+          <string>自动接管模式</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -136,7 +137,7 @@
        <item>
         <widget class="QPushButton" name="btnJammer">
          <property name="text">
-          <string>⚡ 手动干扰 (JAM)</string>
+          <string> 手动干扰 </string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -146,7 +147,7 @@
        <item>
         <widget class="QPushButton" name="btnSpoof">
          <property name="text">
-          <string>🌀 手动诱骗 (SPOOF)</string>
+          <string> 手动诱骗 (SPOOF)</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -159,14 +160,8 @@
 
     <item row="1" column="1">
      <widget class="QGroupBox" name="groupBox_Log">
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>200</height>
-       </size>
-      </property>
       <property name="title">
-       <string>系统日志 (SYSTEM LOG)</string>
+       <string> 系统日志 </string>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_4">
        <item>

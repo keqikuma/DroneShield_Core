@@ -73,6 +73,21 @@ private:
     // 状态锁
     bool m_isAutoSpoofingRunning; // 记录诱骗是否在运行
     bool m_isJammingRunning;      // 记录干扰是否在运行
+
+signals:
+    // 日志信号：发给 UI 下面的文本框
+    void sigLogMessage(const QString &msg);
+
+    // 目标列表更新信号：发给 UI 左侧的表格
+    void sigTargetsUpdated(const QList<DroneInfo> &drones);
+
+    // 状态更新信号：通知 UI 哪个灯该亮 (可选，用于同步按钮状态)
+    void sigStatusChanged(bool isAuto, bool isJamming, bool isSpoofing);
+
+private:
+    // 前端专用
+    void log(const QString &msg);
+
 };
 
 #endif // DEVICEMANAGER_H
