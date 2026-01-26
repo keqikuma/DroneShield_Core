@@ -3,8 +3,9 @@
 
 #include <QMainWindow>
 #include <QList>
-// 引入 DroneInfo 定义 (因为下面的槽函数要用)
+// 引入 DroneInfo 定义
 #include "src/Backend/Drivers/detectiondriver.h"
+// 引入 JammerConfigData 定义
 #include "src/Backend/Drivers/jammerdriver.h"
 
 QT_BEGIN_NAMESPACE
@@ -12,7 +13,6 @@ namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 // 前置声明 RadarView
-// 告诉编译器："RadarView 是一个类，具体细节你去 cpp 里找"
 class RadarView;
 
 class MainWindow : public QMainWindow
@@ -24,9 +24,9 @@ public:
     ~MainWindow();
 
 public slots:
-    // 【接收】更新日志
+    // 更新日志
     void slotUpdateLog(const QString &msg);
-    // 【接收】更新目标表格
+    // 更新目标表格
     void slotUpdateTargets(const QList<DroneInfo> &drones);
 
 signals:
@@ -34,7 +34,13 @@ signals:
     void sigSetAutoMode(bool enable);
     void sigManualJam(bool enable);
     void sigManualSpoof(bool enable);
+
+    // 手动干扰参数配置信号
     void sigConfigJammer(const QList<JammerConfigData> &configs);
+
+    // 继电器压制控制信号 (修复报错的关键)
+    void sigControlRelayChannel(int channel, bool on);
+    void sigControlRelayAll(bool on);
 
 private:
     Ui::MainWindow *ui;

@@ -18,6 +18,11 @@ namespace Config {
 
     const QString LINUX_MAIN_IP   = "127.0.0.1";
     const int     LINUX_PORT      = 8090;
+
+    // === 继电器 (压制设备) ===
+    // 假设通过串口服务器连接，模拟时用本机
+    const QString RELAY_IP = "127.0.0.1";
+    const int     RELAY_PORT = 2000;
 #else
     // 任务书要求的 IP
     const QString DEFAULT_SPOOF_IP   = "192.178.3.200";
@@ -25,6 +30,9 @@ namespace Config {
     // --- Linux 主控板配置 (侦测/写频) ---
     const QString LINUX_MAIN_IP   = "192.178.1.12";
     const int     LINUX_PORT      = 8090;
+    // --- 继电器控制压制 ip ---
+    const QString RELAY_IP = "127.0.0.1";
+    const int     RELAY_PORT = 2000;
 #endif
 
     // 真实部署时，这里填写反制设备的实际经纬度

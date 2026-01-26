@@ -8,6 +8,7 @@
 #include "Drivers/spoofdriver.h"
 #include "Drivers/detectiondriver.h"
 #include "Drivers/jammerdriver.h" // 包含干扰驱动头文件
+#include "Drivers/relaydriver.h"
 
 // 定义方向枚举
 enum class SpoofDirection {
@@ -51,6 +52,10 @@ public:
     // 【新增】开关控制接口
     void setManualJammer(bool enable);
 
+    // 手动继电器控制接口
+    void setRelayChannel(int channel, bool on);
+    void setRelayAll(bool on);
+
     // ==========================================
     // 总控
     // ==========================================
@@ -74,6 +79,7 @@ private:
     SpoofDriver *m_spoofDriver;
     DetectionDriver *m_detectionDriver;
     JammerDriver *m_jammerDriver;
+    RelayDriver *m_relayDriver;
 
     // --- 系统状态 ---
     SystemMode m_currentMode; // 当前系统模式

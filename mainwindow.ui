@@ -131,6 +131,17 @@
          </property>
         </spacer>
        </item>
+
+       <item>
+        <widget class="QPushButton" name="btnRelayControl">
+         <property name="text">
+          <string>信号压制 (Relay)</string>
+         </property>
+         <property name="styleSheet">
+          <string>background-color: #8B4513; color: white;</string>
+         </property>
+        </widget>
+       </item>
        
        <item>
         <widget class="QPushButton" name="btnJammerConfig">

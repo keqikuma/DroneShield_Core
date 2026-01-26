@@ -35,8 +35,8 @@ qt_add_executable(DroneShield_Core
     src/Backend/HAL/httpclient.cpp
     src/Backend/HAL/socketioclient.h
     src/Backend/HAL/socketioclient.cpp
-    # src/Backend/HAL/tcpclient.h   # 暂时未用到的可以注释
-    # src/Backend/HAL/tcpclient.cpp
+    src/Backend/HAL/tcpclient.h   # 暂时未用到的可以注释
+    src/Backend/HAL/tcpclient.cpp
 
     # --- Drivers 层 (业务驱动) ---
     src/Backend/Drivers/jammerdriver.h
@@ -56,6 +56,7 @@ qt_add_executable(DroneShield_Core
     src/Utils/configloader.h
     src/Utils/configloader.cpp
     src/UI/jammerconfdialog.h src/UI/jammerconfdialog.cpp
+    src/UI/relaydialog.h src/UI/relaydialog.cpp
 )
 
 target_link_libraries(DroneShield_Core

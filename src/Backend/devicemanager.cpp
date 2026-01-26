@@ -13,7 +13,7 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     // 初始化状态标志
     m_currentMode = SystemMode::Manual;
     m_isAutoSpoofingRunning = false;
-    m_isLinuxJammerRunning = false; // 手动 Linux 干扰状态
+    m_isLinuxJammerRunning = false;      // 手动 Linux 干扰状态
     m_isRelaySuppressionRunning = false; // 自动 继电器压制状态
 
     ConfigLoader config;
@@ -37,7 +37,12 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     // 4. 启动连接 (侦测服务)
     m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, Config::LINUX_PORT);
 
-    // 5. 启动系统监控定时器 (断线自动重连)
+    // 5. 初始化驱动：继电器 (TCP) - 压制设备
+    m_relayDriver = new RelayDriver(this);
+    // 连接到设备 (模拟时连接本地 Python Mock 端口 2000)
+    m_relayDriver->connectToDevice(Config::RELAY_IP, Config::RELAY_PORT);
+
+    // 6. 启动系统监控定时器 (断线自动重连)
     m_monitorTimer = new QTimer(this);
     m_monitorTimer->setInterval(5000); // 每 5秒检查一次
     connect(m_monitorTimer, &QTimer::timeout, this, [this](){
@@ -86,17 +91,21 @@ void DeviceManager::stopAllBusiness()
         setManualJammer(false);
     }
 
-    // 3. 停止自动压制 (Relay)
+    // 3. 停止压制 (Relay - 包含自动和手动触发的)
+    if (m_relayDriver) {
+        m_relayDriver->setAll(false); // 发送全关指令
+    }
     if (m_isRelaySuppressionRunning) {
-        log("[DeviceManager] 停止自动压制 (Relay)");
-        // TODO: 调用 RelayDriver->setSwitch(false);
+        log("[DeviceManager] 停止压制 (Relay)");
         m_isRelaySuppressionRunning = false;
     }
 }
 
 // ============================================================================
-// 3. 手动模式业务 (Linux 干扰 + 手动诱骗)
+// 3. 手动模式业务
 // ============================================================================
+
+// --- Linux 干扰板卡 ---
 
 void DeviceManager::setJammerConfig(const QList<JammerConfigData> &configs)
 {
@@ -117,6 +126,8 @@ void DeviceManager::setManualJammer(bool enable)
     }
     m_isLinuxJammerRunning = enable;
 }
+
+// --- 诱骗设备 ---
 
 void DeviceManager::setManualCircular()
 {
@@ -143,6 +154,29 @@ void DeviceManager::setManualDirection(SpoofDirection dir)
 
     log(QString("[手动诱骗] 执行定向驱离 -> 方向: %1").arg(dirName));
     if (m_spoofDriver) m_spoofDriver->setLinearMotion(15.0, angle);
+}
+
+// --- 继电器压制 (新增) ---
+
+void DeviceManager::setRelayChannel(int channel, bool on)
+{
+    // 允许手动控制单路继电器
+    if (m_relayDriver) {
+        m_relayDriver->setChannel(channel, on);
+    }
+}
+
+void DeviceManager::setRelayAll(bool on)
+{
+    // 允许手动全开/全关
+    if (m_relayDriver) {
+        m_relayDriver->setAll(on);
+    }
+
+    // 如果当前是自动模式，更新状态锁，避免逻辑冲突
+    if (m_currentMode == SystemMode::Auto) {
+        m_isRelaySuppressionRunning = on;
+    }
 }
 
 // ============================================================================
@@ -193,7 +227,7 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
 
             // 停压制 (Relay)
             if (m_isRelaySuppressionRunning) {
-                // TODO: RelayDriver->stop();
+                if (m_relayDriver) m_relayDriver->setAll(false); // 全关指令
                 m_isRelaySuppressionRunning = false;
                 log("[自动决策] 停止压制 (Relay)");
             }
@@ -221,10 +255,10 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
     // ---------------------------------------------------------
     if (distance <= 1000.0) {
         if (!m_isRelaySuppressionRunning) {
-            log(QString("[自动决策] !!! 进入红区 (%.0f米) !!! -> 触发压制 (Relay)").arg(distance));
+            log(QString("[自动决策] !!! 进入红区 (%.0f米) !!! -> 触发全频段压制 (Relay)").arg(distance));
 
-            // TODO: 这里调用 RelayDriver 开启继电器
-            // m_relayDriver->setSwitch(1, true); ...
+            // 自动开启全开
+            if (m_relayDriver) m_relayDriver->setAll(true);
 
             m_isRelaySuppressionRunning = true;
         }
@@ -234,7 +268,8 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
         if (m_isRelaySuppressionRunning) {
             log("[自动决策] 目标离开红区 -> 停止压制 (Relay)");
 
-            // TODO: 这里调用 RelayDriver 关闭继电器
+            // 自动关闭
+            if (m_relayDriver) m_relayDriver->setAll(false);
 
             m_isRelaySuppressionRunning = false;
         }

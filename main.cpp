@@ -50,6 +50,13 @@ int main(int argc, char *argv[])
         }
     });
 
+    // 2.5 执行信号压制 (Relay)
+    QObject::connect(&w, &MainWindow::sigControlRelayChannel,
+                     systemCore, &DeviceManager::setRelayChannel);
+
+    QObject::connect(&w, &MainWindow::sigControlRelayAll,
+                     systemCore, &DeviceManager::setRelayAll);
+
     // =======================================================
 
     w.slotUpdateLog("系统核心已加载，正在连接侦测节点...");

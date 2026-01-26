@@ -4,10 +4,12 @@
 #include <QTableWidgetItem>
 #include <QDebug>
 
-// 【注意】请确认你的 RadarView 头文件路径是否正确
+// 请确认你的 RadarView 头文件路径是否正确
 // 如果文件在根目录，请改为 #include "radarview.h"
 #include "src/UI/radarview.h"
 #include "src/UI/jammerconfdialog.h"
+
+#include "src/UI/relaydialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -113,6 +115,25 @@ void MainWindow::initConnections()
     connect(ui->btnSpoof, &QPushButton::toggled, this, [this](bool checked){
         emit sigManualSpoof(checked);
         slotUpdateLog(checked ? ">>> 手动开启诱骗指令已下发" : ">>> 手动停止诱骗");
+    });
+
+
+    // 4. 信号压制 (Relay) 按钮逻辑
+    connect(ui->btnRelayControl, &QPushButton::clicked, this, [this](){
+        // 1. 创建弹窗实例
+        RelayDialog dlg(this);
+
+        // 2. 信号转发：将 弹窗的信号 -> 转发给 MainWindow 的信号
+        // (这样 MainWindow 发出的信号，才能被 main.cpp 里的 DeviceManager 接收到)
+
+        connect(&dlg, &RelayDialog::sigControlChannel,
+                this, &MainWindow::sigControlRelayChannel);
+
+        connect(&dlg, &RelayDialog::sigControlAll,
+                this, &MainWindow::sigControlRelayAll);
+
+        // 3. 显示弹窗 (模态)
+        dlg.exec();
     });
 }
 
