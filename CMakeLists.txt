@@ -30,12 +30,15 @@ qt_add_executable(DroneShield_Core
     # 全部改为小写文件名，匹配你的描述
     # src/Backend/HAL/tcpclient.h          src/Backend/HAL/tcpclient.cpp
     src/Backend/HAL/udpsender.h          src/Backend/HAL/udpsender.cpp
+    src/Backend/HAL/httpclient.h         src/Backend/HAL/httpclient.cpp
+    src/Backend/HAL/socketioclient.h     src/Backend/HAL/socketioclient.cpp
 
     # --- Drivers 层 (协议驱动) ---
     src/Backend/Drivers/relaydriver.h    src/Backend/Drivers/relaydriver.cpp
     src/Backend/Drivers/spectrumdriver.h src/Backend/Drivers/spectrumdriver.cpp
     src/Backend/Drivers/jammerdriver.h   src/Backend/Drivers/jammerdriver.cpp
     src/Backend/Drivers/spoofdriver.h    src/Backend/Drivers/spoofdriver.cpp
+    src/Backend/Drivers/detectiondriver.h src/Backend/Drivers/detectiondriver.cpp
 
     # --- Utils 工具 ---
     src/Utils/crcutils.h                 src/Utils/crcutils.cpp
@@ -43,6 +46,7 @@ qt_add_executable(DroneShield_Core
     src/Backend/HAL/httpclient.h src/Backend/HAL/httpclient.cpp
     src/Backend/HAL/socketioclient.h src/Backend/HAL/socketioclient.cpp
     src/Backend/Drivers/detectiondriver.h src/Backend/Drivers/detectiondriver.cpp
+    src/AppStyle.h
 )
 
 target_link_libraries(DroneShield_Core

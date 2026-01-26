@@ -1,6 +1,6 @@
 #include "devicemanager.h"
 #include "../Utils/configloader.h"
-#include "../Consts.h"
+#include "Consts.h"
 
 DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
 {

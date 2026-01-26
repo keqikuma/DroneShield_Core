@@ -2,35 +2,27 @@
 #include <QApplication>
 #include <QTimer>
 #include "src/Backend/devicemanager.h"
+#include "src/AppStyle.h" // <--- 1. 引入刚才写的样式头文件
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+
+    // 2. 在这里应用全局样式 (这就是 QSS 生效的地方)
+    a.setStyleSheet(getDarkTacticalStyle());
+
     MainWindow w;
     w.show();
 
+    // ... 下面保持你原来的逻辑 ...
     DeviceManager *systemCore = new DeviceManager(&w);
 
-    qDebug() << "=== [TEST] 开始测试：自动模式 ===";
+    qDebug() << "=== [TEST] 系统启动：正在连接 Python 模拟器... ===";
 
-    // 1. 2秒后：切换到自动模式
-    QTimer::singleShot(2000, systemCore, [systemCore](){
+    QTimer::singleShot(3000, systemCore, [systemCore](){
+        qDebug() << "=== [TEST] 3秒已到 -> 自动切换为 Auto 模式 ===";
         systemCore->setSystemMode(SystemMode::Auto);
-    });
-
-    // 2. 4秒后：模拟发现目标，距离 1500米 (应该触发圆周)
-    QTimer::singleShot(4000, systemCore, [systemCore](){
-        systemCore->updateDetection(true, 1500.0);
-    });
-
-    // 3. 7秒后：模拟目标逼近，距离 800米 (日志应提示进入红区，继续圆周)
-    QTimer::singleShot(7000, systemCore, [systemCore](){
-        systemCore->updateDetection(true, 800.0);
-    });
-
-    // 4. 10秒后：模拟目标消失 (应该停止诱骗)
-    QTimer::singleShot(10000, systemCore, [systemCore](){
-        systemCore->updateDetection(false, 0.0);
+        qDebug() << "=== [TEST] 等待 Python 脚本推送无人机数据... ===";
     });
 
     return a.exec();

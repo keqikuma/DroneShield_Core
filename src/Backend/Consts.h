@@ -15,10 +15,16 @@ namespace Config {
 #ifdef SIMULATION_MODE
     const QString DEFAULT_SPOOF_IP   = "127.0.0.1";
     const int     DEFAULT_SPOOF_PORT = 9099;
+
+    const QString LINUX_MAIN_IP   = "127.0.0.1";
+    const int     LINUX_PORT      = 8090;
 #else
     // 任务书要求的 IP
     const QString DEFAULT_SPOOF_IP   = "192.178.3.200";
     const int     DEFAULT_SPOOF_PORT = 9099;
+    // --- Linux 主控板配置 (侦测/写频) ---
+    const QString LINUX_MAIN_IP   = "192.178.1.12";
+    const int     LINUX_PORT      = 8090;
 #endif
 
     const QString LURE_SKEY = "a57502fcdc4e7412";

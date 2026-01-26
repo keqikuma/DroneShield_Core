@@ -45,12 +45,12 @@ public:
     // ==========================================
     // 自动模式核心接口
     // ==========================================
-    /**
-     * @brief 模拟接收侦测数据 (在这个阶段我们手动调用它来模拟)
-     * @param hasDrone 是否发现无人机
-     * @param distance 目标距离 (米)
-     */
-    void updateDetection(bool hasDrone, double distance);
+    // /**
+    //  * @brief 模拟接收侦测数据 (在这个阶段我们手动调用它来模拟)
+    //  * @param hasDrone 是否发现无人机
+    //  * @param distance 目标距离 (米)
+    //  */
+    // void updateDetection(bool hasDrone, double distance);
 
 private slots:
     // 响应来自 DetectionDriver 的实时信号
