@@ -27,6 +27,13 @@ namespace Config {
     const int     LINUX_PORT      = 8090;
 #endif
 
+    // 真实部署时，这里填写反制设备的实际经纬度
+    constexpr double BASE_LAT = 31.2304;
+    constexpr double BASE_LON = 121.4737;
+
+    constexpr double DEG_TO_RAD = 0.017453292519943295769236907684886;
+    constexpr double EARTH_RADIUS = 6378137.0; // 地球半径 (米)
+
     const QString LURE_SKEY = "a57502fcdc4e7412";
 
     // 默认波形文件路径

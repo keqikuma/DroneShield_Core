@@ -36,6 +36,15 @@ void SocketIoClient::onTextMessageReceived(const QString &message)
 
     // qDebug() << "[DEBUG] 收到原始包:" << message; // 调试用
 
+    // 心跳保持 ===
+    // 协议定义: '2' 是服务器发的 Ping
+    if (message == "2") {
+        // 我们必须回一个 '3' (Pong)
+        m_webSocket->sendTextMessage("3");
+        // qDebug() << "[SocketIO] 心跳回应 (Pong)"; // 嫌刷屏可以注释掉
+        return;
+    }
+
     if (message.startsWith("0")) {
         // 收到服务端握手包(0)后，必须回复连接指令(40)
         // 否则服务器不知道你要连哪个命名空间（默认是 /）
