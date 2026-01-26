@@ -1,8 +1,12 @@
-// mainwindow.cpp
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QDateTime>
 #include <QTableWidgetItem>
+#include <QDebug>
+
+// 【注意】请确认你的 RadarView 头文件路径是否正确
+// 如果文件在根目录，请改为 #include "radarview.h"
+#include "src/UI/radarview.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -11,33 +15,48 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     // =============================================
-    // 手动设置布局比例 (替代 .ui 文件中的配置)
+    // 1. 布局调整 (C++ 代码控制，比 .ui 更稳健)
     // =============================================
 
-    // 1. 设置行比例
+    // 行比例 (垂直方向): 雷达占 40%, 日志占 60%
     ui->gridLayout_Main->setRowStretch(0, 2);
     ui->gridLayout_Main->setRowStretch(1, 3);
 
-    // 2. 设置列比例 (水平方向)
-    ui->gridLayout_Main->setColumnStretch(0, 1);
-    ui->gridLayout_Main->setColumnStretch(1, 1);
-    ui->gridLayout_Main->setColumnStretch(2, 1);
+    // 列比例 (水平方向): 三列等宽 (1:1:1)
+    ui->gridLayout_Main->setColumnStretch(0, 1); // 列表
+    ui->gridLayout_Main->setColumnStretch(1, 1); // 雷达
+    ui->gridLayout_Main->setColumnStretch(2, 1); // 控制
 
-    // 3. 调整控件尺寸限制
-
+    // 解锁右侧控制面板的宽度限制 (允许它占满 1/3)
     ui->groupBox_Control->setMinimumWidth(0);
     ui->groupBox_Control->setMaximumWidth(16777215);
 
-    // B. 保持雷达的高度限制 (防止太高)
+    // 限制雷达区域的最大高度，防止挤压日志
     ui->groupBox_Radar->setMaximumHeight(450);
 
     // =============================================
+    // 2. 初始化雷达控件 (RadarView)
+    // =============================================
+    m_radar = new RadarView(this);
 
-    // 初始化表格列宽
-    ui->tblTargets->setColumnWidth(0, 120);
-    ui->tblTargets->setColumnWidth(1, 120);
-    ui->tblTargets->setColumnWidth(2, 100);
+    // 将自定义的雷达控件添加到界面布局中
+    // 注意：我们在 .ui 里放了一个 layout (verticalLayout_2)，直接加进去即可
+    ui->groupBox_Radar->layout()->addWidget(m_radar);
 
+    // 隐藏 .ui 设计器里那个黑色的占位符 widget
+    if (ui->widgetRadar) {
+        ui->widgetRadar->hide();
+    }
+
+    // =============================================
+    // 3. 初始化表格样式
+    // =============================================
+    // 左侧列表变宽了，我们可以让列宽更舒展
+    ui->tblTargets->setColumnWidth(0, 120); // ID
+    ui->tblTargets->setColumnWidth(1, 120); // 机型
+    ui->tblTargets->setColumnWidth(2, 100); // 距离
+
+    // 初始化信号连接
     initConnections();
 }
 
@@ -48,29 +67,30 @@ MainWindow::~MainWindow()
 
 void MainWindow::initConnections()
 {
-    // 绑定界面按钮发出的信号
-    // 当点击“自动模式”按钮时
+    // === 按钮事件连接 ===
+
+    // 1. 自动模式按钮
     connect(ui->btnAutoMode, &QPushButton::toggled, this, [this](bool checked){
         if(checked) {
-            ui->btnAutoMode->setText("自动模式: ON");
-            slotUpdateLog(">>> 用户切换至 [自动接管] 模式");
+            ui->btnAutoMode->setText("🛡️ 自动模式: ON");
+            // 样式变亮 (可选，如果用了 QSS 会自动生效)
         } else {
-            ui->btnAutoMode->setText("自动模式");
-            slotUpdateLog(">>> 用户切换至 [手动] 模式");
+            ui->btnAutoMode->setText("🛡️ 自动接管模式");
         }
         emit sigSetAutoMode(checked);
+        slotUpdateLog(checked ? ">>> 用户切换至 [自动接管] 模式" : ">>> 用户切换至 [手动] 模式");
     });
 
-    // 手动干扰
+    // 2. 手动干扰按钮
     connect(ui->btnJammer, &QPushButton::toggled, this, [this](bool checked){
         emit sigManualJam(checked);
-        slotUpdateLog(checked ? ">>> 手动开启干扰" : ">>> 手动停止干扰");
+        slotUpdateLog(checked ? ">>> 手动开启干扰指令已下发" : ">>> 手动停止干扰");
     });
 
-    // 手动诱骗
+    // 3. 手动诱骗按钮
     connect(ui->btnSpoof, &QPushButton::toggled, this, [this](bool checked){
         emit sigManualSpoof(checked);
-        slotUpdateLog(checked ? ">>> 手动开启诱骗" : ">>> 手动停止诱骗");
+        slotUpdateLog(checked ? ">>> 手动开启诱骗指令已下发" : ">>> 手动停止诱骗");
     });
 }
 
@@ -78,41 +98,55 @@ void MainWindow::initConnections()
 
 void MainWindow::slotUpdateLog(const QString &msg)
 {
+    // 获取当前时间
     QString timeStr = QDateTime::currentDateTime().toString("[HH:mm:ss] ");
-    // 追加到文本框底部
+    // 追加到底部文本框
     ui->textLog->append(timeStr + msg);
 }
 
 void MainWindow::slotUpdateTargets(const QList<DroneInfo> &drones)
 {
-    // 1. 清空旧数据
-    ui->tblTargets->setRowCount(0);
+    // --- Part 1: 更新左侧列表 ---
+    ui->tblTargets->setRowCount(0); // 清空旧数据
 
-    // 2. 遍历添加新数据
     for (const auto &drone : drones) {
         int row = ui->tblTargets->rowCount();
         ui->tblTargets->insertRow(row);
 
-        // ID
         ui->tblTargets->setItem(row, 0, new QTableWidgetItem(drone.id));
-        // 机型
         ui->tblTargets->setItem(row, 1, new QTableWidgetItem(drone.model));
-        // 距离 (这里暂时还是模拟值，或者从 drone.lat/lon 计算)
-        ui->tblTargets->setItem(row, 2, new QTableWidgetItem("800m"));
+        ui->tblTargets->setItem(row, 2, new QTableWidgetItem("800m")); // 模拟距离
 
-        // 威胁度/状态
-        QTableWidgetItem *statusItem = new QTableWidgetItem("锁定");
+        QTableWidgetItem *statusItem = new QTableWidgetItem("⚠️ 锁定");
         statusItem->setForeground(Qt::red);
         statusItem->setTextAlignment(Qt::AlignCenter);
         ui->tblTargets->setItem(row, 3, statusItem);
     }
 
-    // 更新系统状态标签
+    // --- Part 2: 更新中间雷达 (核心逻辑) ---
+    QList<RadarTarget> radarTargets;
+    for (const auto &d : drones) {
+        RadarTarget t;
+        t.id = d.id;
+        t.distance = 800.0; // 暂时用模拟距离 (实际应使用 lat/lon 计算)
+
+        // 简单的模拟方位生成：根据 ID 长度算个角度，让它在雷达上不一样
+        // 实际项目中这里应该是 GPS 方位角计算结果
+        t.angle = (static_cast<int>(d.id.length()) * 50) % 360;
+
+        radarTargets.append(t);
+    }
+    // 刷新雷达显示
+    if (m_radar) {
+        m_radar->updateTargets(radarTargets);
+    }
+
+    // --- Part 3: 更新右侧系统状态 ---
     if (drones.isEmpty()) {
         ui->label_SystemStatus->setText("系统状态: 扫描中...");
-        ui->label_SystemStatus->setStyleSheet("color: #00ff00;"); // 绿
+        ui->label_SystemStatus->setStyleSheet("color: #00ff00;"); // 绿色
     } else {
         ui->label_SystemStatus->setText(QString("系统状态: 发现威胁 (%1)").arg(drones.size()));
-        ui->label_SystemStatus->setStyleSheet("color: #ff0000; font-weight: bold; font-size: 14px;"); // 红
+        ui->label_SystemStatus->setStyleSheet("color: #ff0000; font-weight: bold; font-size: 14px;"); // 红色加粗
     }
 }

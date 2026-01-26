@@ -1,59 +1,67 @@
 cmake_minimum_required(VERSION 3.19)
 project(DroneShield_Core LANGUAGES CXX)
 
-# 1. 【关键修正】必须包含 Network 模块，否则 QTcpSocket/QUdpSocket 报错
+# 1. 核心模块依赖
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network WebSockets)
 
 qt_standard_project_setup()
 
-# 2. 【模拟模式开关】
-# 没有硬件时保留此行；连接真实硬件时，请在行首加 # 注释掉
+# 2. 模拟模式宏定义 (连接真实硬件时请注释掉此行)
 add_compile_definitions(SIMULATION_MODE)
 
 qt_add_executable(DroneShield_Core
     WIN32 MACOSX_BUNDLE
+
+    # --- 主程序入口 & 主窗口 ---
     main.cpp
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+    src/AppStyle.h            # 样式表头文件
 
-    # --- 后端常量 ---
-    # 请确认你的实际文件名是 Consts.h 还是 consts.h？这里暂时写 Consts.h
+    # --- 自定义 UI 控件 ---
+    src/UI/radarview.h
+    src/UI/radarview.cpp
+
+    # --- 后端核心 ---
     src/Backend/Consts.h
-
-    # --- 核心管理类 ---
-    # 请确认实际文件名是 DeviceManager.h 还是 devicemanager.h？
-    # 根据你之前的习惯，这里改回小写，如果不对应请手动修改！
-    src/Backend/devicemanager.h          src/Backend/devicemanager.cpp
+    src/Backend/devicemanager.h
+    src/Backend/devicemanager.cpp
 
     # --- HAL 层 (硬件通信) ---
-    # 全部改为小写文件名，匹配你的描述
-    # src/Backend/HAL/tcpclient.h          src/Backend/HAL/tcpclient.cpp
-    src/Backend/HAL/udpsender.h          src/Backend/HAL/udpsender.cpp
-    src/Backend/HAL/httpclient.h         src/Backend/HAL/httpclient.cpp
-    src/Backend/HAL/socketioclient.h     src/Backend/HAL/socketioclient.cpp
+    src/Backend/HAL/udpsender.h
+    src/Backend/HAL/udpsender.cpp
+    src/Backend/HAL/httpclient.h
+    src/Backend/HAL/httpclient.cpp
+    src/Backend/HAL/socketioclient.h
+    src/Backend/HAL/socketioclient.cpp
+    # src/Backend/HAL/tcpclient.h   # 暂时未用到的可以注释
+    # src/Backend/HAL/tcpclient.cpp
 
-    # --- Drivers 层 (协议驱动) ---
-    src/Backend/Drivers/relaydriver.h    src/Backend/Drivers/relaydriver.cpp
-    src/Backend/Drivers/spectrumdriver.h src/Backend/Drivers/spectrumdriver.cpp
-    src/Backend/Drivers/jammerdriver.h   src/Backend/Drivers/jammerdriver.cpp
-    src/Backend/Drivers/spoofdriver.h    src/Backend/Drivers/spoofdriver.cpp
-    src/Backend/Drivers/detectiondriver.h src/Backend/Drivers/detectiondriver.cpp
+    # --- Drivers 层 (业务驱动) ---
+    src/Backend/Drivers/jammerdriver.h
+    src/Backend/Drivers/jammerdriver.cpp
+    src/Backend/Drivers/spoofdriver.h
+    src/Backend/Drivers/spoofdriver.cpp
+    src/Backend/Drivers/detectiondriver.h
+    src/Backend/Drivers/detectiondriver.cpp
+    src/Backend/Drivers/relaydriver.h      # 确保你目录下有这些文件，没有就注释掉
+    src/Backend/Drivers/relaydriver.cpp
+    src/Backend/Drivers/spectrumdriver.h   # 确保你目录下有这些文件，没有就注释掉
+    src/Backend/Drivers/spectrumdriver.cpp
 
     # --- Utils 工具 ---
-    src/Utils/crcutils.h                 src/Utils/crcutils.cpp
-    src/Utils/configloader.h src/Utils/configloader.cpp
-    src/Backend/HAL/httpclient.h src/Backend/HAL/httpclient.cpp
-    src/Backend/HAL/socketioclient.h src/Backend/HAL/socketioclient.cpp
-    src/Backend/Drivers/detectiondriver.h src/Backend/Drivers/detectiondriver.cpp
-    src/AppStyle.h
+    src/Utils/crcutils.h
+    src/Utils/crcutils.cpp
+    src/Utils/configloader.h
+    src/Utils/configloader.cpp
 )
 
 target_link_libraries(DroneShield_Core
     PRIVATE
         Qt::Core
         Qt::Widgets
-        Qt::Network  # 3. 【关键修正】链接网络库
+        Qt::Network
         Qt::WebSockets
 )
 
