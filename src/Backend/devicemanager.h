@@ -3,10 +3,11 @@
 
 #include <QObject>
 #include <QDebug>
+#include <QTimer>
+
 #include "Drivers/spoofdriver.h"
-// 引入侦测和干扰驱动
 #include "Drivers/detectiondriver.h"
-#include "Drivers/jammerdriver.h"
+#include "Drivers/jammerdriver.h" // 包含干扰驱动头文件
 
 // 定义方向枚举
 enum class SpoofDirection {
@@ -38,19 +39,23 @@ public:
     // ==========================================
     // 手动模式业务接口
     // ==========================================
-    void setManualCircular();
-    void setManualDirection(SpoofDirection dir);
     void setSystemMode(SystemMode mode);
 
+    // 1. 手动诱骗
+    void setManualCircular();
+    void setManualDirection(SpoofDirection dir);
+
+    // 2. 手动干扰 (Linux板卡)
+    // 【新增】配置参数接口
+    void setJammerConfig(const QList<JammerConfigData> &configs);
+    // 【新增】开关控制接口
+    void setManualJammer(bool enable);
+
     // ==========================================
-    // 自动模式核心接口
+    // 总控
     // ==========================================
-    // /**
-    //  * @brief 模拟接收侦测数据 (在这个阶段我们手动调用它来模拟)
-    //  * @param hasDrone 是否发现无人机
-    //  * @param distance 目标距离 (米)
-    //  */
-    // void updateDetection(bool hasDrone, double distance);
+    // 【新增】停止所有正在运行的业务 (用于切换模式或目标消失时)
+    void stopAllBusiness();
 
 private slots:
     // 响应来自 DetectionDriver 的实时信号
@@ -61,33 +66,35 @@ private:
     // 内部核心决策逻辑
     void processDecision(bool hasDrone, double distance);
 
-private:
-    SpoofDriver *m_spoofDriver;
+    // 内部辅助日志
+    void log(const QString &msg);
 
-    // 侦测与干扰驱动
+private:
+    // --- 驱动实例 ---
+    SpoofDriver *m_spoofDriver;
     DetectionDriver *m_detectionDriver;
     JammerDriver *m_jammerDriver;
 
+    // --- 系统状态 ---
     SystemMode m_currentMode; // 当前系统模式
+    QTimer *m_monitorTimer;   // 监控定时器 (断线重连)
 
-    // 状态锁
-    bool m_isAutoSpoofingRunning; // 记录诱骗是否在运行
-    bool m_isJammingRunning;      // 记录干扰是否在运行
+    // --- 业务运行状态锁 ---
+    bool m_isAutoSpoofingRunning;     // 自动诱骗是否运行中
+
+    // 【新增】手动 Linux 干扰是否运行中
+    bool m_isLinuxJammerRunning;
+
+    // 【新增】自动 继电器压制是否运行中
+    bool m_isRelaySuppressionRunning;
 
 signals:
-    // 日志信号：发给 UI 下面的文本框
+    // 日志信号
     void sigLogMessage(const QString &msg);
-
-    // 目标列表更新信号：发给 UI 左侧的表格
+    // 目标列表更新信号
     void sigTargetsUpdated(const QList<DroneInfo> &drones);
-
-    // 状态更新信号：通知 UI 哪个灯该亮 (可选，用于同步按钮状态)
+    // 状态更新信号
     void sigStatusChanged(bool isAuto, bool isJamming, bool isSpoofing);
-
-private:
-    // 前端专用
-    void log(const QString &msg);
-
 };
 
 #endif // DEVICEMANAGER_H

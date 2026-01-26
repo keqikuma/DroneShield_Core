@@ -15,7 +15,6 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_Main">
-    
     <item row="0" column="0" rowspan="2">
      <widget class="QGroupBox" name="groupBox_Targets">
       <property name="title">
@@ -52,7 +51,6 @@
       </layout>
      </widget>
     </item>
-
     <item row="0" column="1">
      <widget class="QGroupBox" name="groupBox_Radar">
       <property name="title">
@@ -75,12 +73,11 @@
       </layout>
      </widget>
     </item>
-
     <item row="0" column="2" rowspan="2">
      <widget class="QGroupBox" name="groupBox_Control">
       <property name="maximumSize">
        <size>
-        <width>250</width>
+        <width>320</width>
         <height>16777215</height>
        </size>
       </property>
@@ -134,10 +131,19 @@
          </property>
         </spacer>
        </item>
+       
+       <item>
+        <widget class="QPushButton" name="btnJammerConfig">
+         <property name="text">
+          <string>干扰参数设置</string>
+         </property>
+        </widget>
+       </item>
+       
        <item>
         <widget class="QPushButton" name="btnJammer">
          <property name="text">
-          <string> 手动干扰 </string>
+          <string> 手动干扰 (执行) </string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -157,7 +163,6 @@
       </layout>
      </widget>
     </item>
-
     <item row="1" column="1">
      <widget class="QGroupBox" name="groupBox_Log">
       <property name="title">

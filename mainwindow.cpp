@@ -7,6 +7,7 @@
 // 【注意】请确认你的 RadarView 头文件路径是否正确
 // 如果文件在根目录，请改为 #include "radarview.h"
 #include "src/UI/radarview.h"
+#include "src/UI/jammerconfdialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -83,8 +84,29 @@ void MainWindow::initConnections()
 
     // 2. 手动干扰按钮
     connect(ui->btnJammer, &QPushButton::toggled, this, [this](bool checked){
+        // 发送信号给后端 (main.cpp 连接到 setManualJammer)
         emit sigManualJam(checked);
-        slotUpdateLog(checked ? ">>> 手动开启干扰指令已下发" : ">>> 手动停止干扰");
+        slotUpdateLog(checked ? ">>> [指令] 手动开启干扰 (Linux)" : ">>> [指令] 手动停止干扰");
+    });
+
+    connect(ui->btnJammerConfig, &QPushButton::clicked, this, [this](){
+        JammerConfigDialog dlg(this);
+        if (dlg.exec() == QDialog::Accepted) {
+            auto uiConfigs = dlg.getConfigs();
+
+            // 转换数据结构: UI Struct -> Driver Struct
+            QList<JammerConfigData> drvConfigs;
+            for(auto &c : uiConfigs) {
+                JammerConfigData d;
+                d.freqType = c.freqType;
+                d.startFreq = c.startFreq;
+                d.endFreq = c.endFreq;
+                drvConfigs.append(d);
+            }
+
+            emit sigConfigJammer(drvConfigs);
+            slotUpdateLog(">>> 干扰参数已更新，等待执行");
+        }
     });
 
     // 3. 手动诱骗按钮
@@ -120,7 +142,7 @@ void MainWindow::slotUpdateTargets(const QList<DroneInfo> &drones)
         // 格式化为整数显示，例如 "1985m"
         qDebug() << "UI收到数据 -> ID:" << drone.id << " 距离(Lat):" << drone.lat;
 
-        QString distStr = QString::number(drone.lat, 'f', 0) + "m";
+        QString distStr = QString::number(drone.distance, 'f', 0) + "m";
         ui->tblTargets->setItem(row, 2, new QTableWidgetItem(distStr));
 
         QTableWidgetItem *statusItem = new QTableWidgetItem("⚠️ 锁定");
@@ -135,11 +157,11 @@ void MainWindow::slotUpdateTargets(const QList<DroneInfo> &drones)
         RadarTarget t;
         t.id = d.id;
 
-        // 【关键修改 2】把 lat 赋值给 distance，让雷达红点根据真实距离移动
-        t.distance = d.lat;
+        // 直接使用真实距离
+        t.distance = d.distance;
 
-        // 模拟方位：根据 ID 长度算个固定角度，保证同一个 ID 角度不变
-        t.angle = (static_cast<int>(d.id.length()) * 50) % 360;
+        // 直接使用真实方位 (不再用 ID 算假角度了)
+        t.angle = d.azimuth;
 
         radarTargets.append(t);
     }

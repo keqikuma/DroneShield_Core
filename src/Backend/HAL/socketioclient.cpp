@@ -17,6 +17,10 @@ SocketIoClient::SocketIoClient(QObject *parent) : QObject(parent)
 
 void SocketIoClient::connectToServer(const QString &url)
 {
+    if (m_webSocket->state() == QAbstractSocket::ConnectedState) {
+        return;
+    }
+
     // Socket.IO 通常连接路径是 /socket.io/?EIO=4&transport=websocket
     QString fullUrl = url;
     if (!fullUrl.endsWith("/")) fullUrl += "/";

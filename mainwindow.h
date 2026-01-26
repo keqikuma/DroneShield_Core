@@ -5,12 +5,13 @@
 #include <QList>
 // 引入 DroneInfo 定义 (因为下面的槽函数要用)
 #include "src/Backend/Drivers/detectiondriver.h"
+#include "src/Backend/Drivers/jammerdriver.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
-// 【关键修复】前置声明 RadarView
+// 前置声明 RadarView
 // 告诉编译器："RadarView 是一个类，具体细节你去 cpp 里找"
 class RadarView;
 
@@ -29,10 +30,11 @@ public slots:
     void slotUpdateTargets(const QList<DroneInfo> &drones);
 
 signals:
-    // 【发送】界面上的按钮被点击了，通知后端
+    // 界面上的按钮被点击了，通知后端
     void sigSetAutoMode(bool enable);
     void sigManualJam(bool enable);
     void sigManualSpoof(bool enable);
+    void sigConfigJammer(const QList<JammerConfigData> &configs);
 
 private:
     Ui::MainWindow *ui;
