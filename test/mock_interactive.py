@@ -8,7 +8,7 @@ import random
 # 全局配置与状态
 # ==========================================
 # 初始距离 (米)
-current_distance = 2000.0  
+current_distance = 1000.0  
 is_jamming = False         # 干扰状态 (Linux板卡)
 is_spoofing = False        # 诱骗状态
 uav_id = "DJI_Mavic_3_Pro"

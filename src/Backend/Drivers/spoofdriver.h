@@ -2,59 +2,56 @@
 #define SPOOFDRIVER_H
 
 #include <QObject>
-#include <QMap>
+#include <QJsonObject>
+#include <QJsonDocument>
 #include "../HAL/udpsender.h"
+
+// 定义驱离方向枚举
+enum class SpoofDirection {
+    North = 0,
+    East = 90,
+    South = 180,
+    West = 270
+};
 
 class SpoofDriver : public QObject
 {
     Q_OBJECT
 public:
-    explicit SpoofDriver(const QString &hostIp, int hostPort, QObject *parent = nullptr);
+    explicit SpoofDriver(const QString &ip, int port, QObject *parent = nullptr);
 
     // ==========================================
-    // 核心业务接口
+    // 基础原子指令
     // ==========================================
 
-    // 启动/停止
-    void startSpoofing(double lat, double lon, double alt = 100.0);
-    void stopSpoofing();
+    // 1. 设置经纬度 (CMD: 601)
+    // 必须先设置经纬度，才能开启后续模式
+    void setPosition(double lon, double lat, double alt);
 
-    // ==========================================
-    // 完整指令集
-    // ==========================================
+    // 2. 射频总开关 (CMD: 602)
+    // enable: true=开, false=关
+    void setSwitch(bool enable);
 
-    // --- 基础配置 ---
-    void sendLogin();                           // 619 登录
-    void sendLogout();                          // 620 注销/断开
-    void rebootDevice();                        // 605 重启设备
-    void setHeartbeatCycle(int cycle);          // 615 设置心跳周期
-    void setSystemTime();                       // 613 同步时间
+    // 3. 开启圆周驱离 (CMD: 610)
+    // radius: 半径(米), cycle: 周期(秒?)
+    void startCircular(double radius = 100.0, double cycle = 50.0);
 
-    // --- 诱骗参数 ---
-    void setAttenuation(int type, float value); // 603 功率衰减
-    void setDelay(int type, float ns);          // 604 通道时延
+    // 4. 开启定向驱离 (CMD: 608)
+    // speed: 速度(m/s), dir: 方向
+    void startDirectional(SpoofDirection dir, double speed = 15.0);
 
-    // --- 运动控制 ---
-    void setLinearMotion(float speed, float angle); // 608 初速度
-    void setAcceleration(float acc, float angle);   // 609 加速度
-    void setCircularMotion(float radius, float cycle, int direction = 0); // 610 圆周
-
-    // --- 区域控制 ---
-    // id: 0-9, alt: 高度(米)
-    void setNoFlyZone(int id, double lat, double lon, int alt); // 705 设置禁飞区
-    void queryNoFlyZone();                                      // 802 查询禁飞区
-
-signals:
-    // 上报设备状态 (解析 600 报文后发出)
-    void deviceStatusUpdated(bool isLocked, bool isReady);
+    // 辅助：发送登录/心跳 (可选，视硬件需求)
+    void sendLogin();
 
 private:
     UdpSender *m_udpSender;
 
-    // 内部辅助
-    QString getChannelName(int type);
-    void sendUdpCmd(const QString &code, const QJsonObject &json);
-    QString getLocalIP(); // 辅助函数：获取本机IP
+    // 鉴权密钥 (来自 udp.js)
+    const QString SKEY = "a57502fcdc4e7412";
+
+    // 辅助函数：构造协议包 FF + Length + Code + JSON
+    void sendCommand(const QString &code, const QJsonObject &data);
+    QString getLocalIP();
 };
 
 #endif // SPOOFDRIVER_H

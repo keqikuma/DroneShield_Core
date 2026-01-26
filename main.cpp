@@ -41,19 +41,13 @@ int main(int argc, char *argv[])
     QObject::connect(&w, &MainWindow::sigManualJam,
                      systemCore, &DeviceManager::setManualJammer);
 
-    // 2.4 执行手动诱骗 (开关) -> 简单起见，开启时默认执行圆周
-    QObject::connect(&w, &MainWindow::sigManualSpoof, systemCore, [systemCore](bool enable){
-        if(enable) {
-            systemCore->setManualCircular();
-        } else {
-            systemCore->stopSpoofing();
-        }
-    });
+    // 2.4 执行手动诱骗 (开关)
+    QObject::connect(&w, &MainWindow::sigManualSpoof,
+                     systemCore, &DeviceManager::setManualSpoofSwitch);
 
     // 2.5 执行信号压制 (Relay)
     QObject::connect(&w, &MainWindow::sigControlRelayChannel,
                      systemCore, &DeviceManager::setRelayChannel);
-
     QObject::connect(&w, &MainWindow::sigControlRelayAll,
                      systemCore, &DeviceManager::setRelayAll);
 
