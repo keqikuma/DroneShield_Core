@@ -32,7 +32,7 @@ inline QString getDarkTacticalStyle() {
             gridline-color: #333333;
             color: #00ff00;
             border: 1px solid #444;
-            font-family: "Consolas", "Monospace";
+            font-family: "Menlo", "Consolas", "Monospace";
         }
         QHeaderView::section {
             background-color: #222222;

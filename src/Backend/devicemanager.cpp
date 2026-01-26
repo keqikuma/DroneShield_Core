@@ -163,7 +163,7 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
     // D. 红区干扰判断
     if (distance <= 1000.0) {
         if (!m_isJammingRunning) {
-            log(QString("[自动决策] !!! 进入红区 (%.1f米) !!! -> 开启干扰").arg(distance));
+            log(QString("[自动决策] !!! 进入红区 (%1米) !!! -> 开启干扰").arg(distance, 0, 'f', 1));
             if (m_jammerDriver) m_jammerDriver->setJamming(true);
             m_isJammingRunning = true;
         }

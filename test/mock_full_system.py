@@ -1,114 +1,139 @@
 import asyncio
-import socket
-import threading
-import json
-from aiohttp import web
 import socketio
+from aiohttp import web
+import json
+import random
+import time
 
-# ================= 配置 =================
-HTTP_PORT = 8090  
-UDP_PORT = 9099
+# === 全局状态 ===
+current_distance = 800.0  # 初始距离 2000米
+is_jamming = False         # 干扰状态
+is_spoofing = False        # 诱骗状态
+uav_id = "DJI_Mavic_3_Pro"
 
+# === 1. Socket.IO (用于发送侦测数据给 Qt) ===
 sio = socketio.AsyncServer(async_mode='aiohttp', cors_allowed_origins='*')
 app = web.Application()
 sio.attach(app)
 
-# 全局同步锁：用于等待 Qt 连接
-qt_connected_event = asyncio.Event()
-
-# ================= 1. UDP 诱骗模拟 =================
-def run_udp_server():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.bind(('0.0.0.0', UDP_PORT))
-        print(f"[UDP] 诱骗监听端口: {UDP_PORT}")
-        while True:
-            data, addr = sock.recvfrom(4096)
-            raw = data.decode('utf-8', errors='ignore')
-            if raw.startswith('FF'):
-                code = raw[6:9]
-                print(f"[UDP指令] Code: {code}")
-                # 简单解析一下关键指令
-                if code == "602":
-                    obj = json.loads(raw[9:])
-                    sw = "开 (ON)" if obj.get('iSwitch') == 1 else "关 (OFF)"
-                    print(f"      >>> 诱骗开关状态: {sw} <<<")
-    except Exception as e:
-        print(f"UDP Error: {e}")
-
-# ================= 2. HTTP 干扰模拟 =================
-async def handle_write_freq(request):
-    print(f"[HTTP] 收到写频参数")
-    return web.json_response({"status": "ok"})
-
-async def handle_interference(request):
-    data = await request.json()
-    state = "开 (ON)" if data.get('switch') == 1 else "关 (OFF)"
-    print(f"[HTTP] >>> 干扰压制状态: {state} <<<")
-    return web.json_response({"status": "ok"})
-
-app.router.add_post('/setWriteFreq', handle_write_freq)
-app.router.add_post('/interferenceControl', handle_interference)
-
-# ================= 3. Socket.IO 导演逻辑 =================
-
 @sio.event
 async def connect(sid, environ):
     print(f"[SocketIO] Qt客户端已连接! (SID: {sid})")
-    # 解锁导演线程
-    qt_connected_event.set()
 
 @sio.event
 async def disconnect(sid):
-    print(f"[SocketIO] Qt客户端断开")
-    qt_connected_event.clear()
+    print("[SocketIO] Qt客户端断开")
 
-async def simulation_director():
-    print("[Director] 等待 Qt 程序连接...")
+# === 2. HTTP Server (用于接收 Qt 的干扰指令) ===
+async def handle_jammer_cmd(request):
+    global is_jamming
+    data = await request.json()
+    # Qt 发过来的是 {"switch": 1} 或 0
+    cmd = data.get('switch', 0)
     
-    # 【关键修改】阻塞等待，直到 Qt 连上
-    await qt_connected_event.wait()
-    
-    print("[Director] Qt 已上线，3秒后开始播放剧本...")
-    await asyncio.sleep(3) 
+    if cmd == 1:
+        is_jamming = True
+        print("⚡ [收到指令] 干扰已开启！无人机将停止前进！")
+    else:
+        is_jamming = False
+        print("🛑 [收到指令] 干扰已停止。")
+        
+    return web.json_response({'status': 'ok'})
 
-    # --- 场景 1: 发现目标 ---
-    print("\n[Director] === Action! 发现 Mini 4 Pro (距离 800m) ===")
-    print("   (预期: Qt 应触发【红色】干扰和诱骗)")
-    
-    drone_data = [{
-        "uav_info": {
-            "uav_id": "TEST_DRONE_001",
-            "model_name": "Mini 4 Pro",
-            "uav_lat": 30.0, "uav_lng": 120.0,
-            "freq": 2400
-        }
-    }]
-    
-    # 持续推送 8 秒 (给 Qt 足够的反应时间)
-    for i in range(8):
-        await sio.emit('droneStatus', drone_data)
-        await asyncio.sleep(1)
-    
-    # --- 场景 2: 目标消失 ---
-    print("\n[Director] === Cut! 目标消失 ===")
-    print("   (预期: Qt 应停止所有动作)")
-    await sio.emit('droneStatus', []) 
-    
-    print("[Director] 演示结束")
+app.router.add_post('/api/jammer/switch', handle_jammer_cmd)
 
-async def start_server():
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', HTTP_PORT)
-    print(f"[HTTP/SocketIO] 服务启动: http://localhost:{HTTP_PORT}")
-    await site.start()
-    await simulation_director()
-    while True: await asyncio.sleep(3600)
+# === 3. UDP Server (用于接收 Qt 的诱骗指令) ===
+class UdpProtocol:
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        global is_spoofing
+        message = data.decode()
+        # Qt 发过来的格式类似: FF0039602{"iSwitch":1,...}
+        # 我们简单判断一下 iSwitch":1
+        if '"iSwitch":1' in message:
+            if not is_spoofing:
+                is_spoofing = True
+                print("🌀 [收到指令] 诱骗已开启！无人机将被驱离！")
+        elif '"iSwitch":0' in message:
+            if is_spoofing:
+                is_spoofing = False
+                print("🛑 [收到指令] 诱骗已停止。")
+
+# === 4. 核心物理引擎 (模拟无人机运动) ===
+async def drone_simulation_loop():
+    global current_distance, is_jamming, is_spoofing
+    
+    print("🎮 [模拟器] 游戏开始！无人机从 2000m 处向你飞来...")
+    
+    while True:
+        # --- 物理计算 ---
+        if is_spoofing:
+            # 如果开了诱骗，无人机被驱离，距离变远 (速度快)
+            current_distance += 30.0 
+            status_text = "被驱离 🔙"
+        elif is_jamming:
+            # 如果开了干扰，无人机悬停 (模拟链路丢失，悬停或漂移)
+            current_distance += random.uniform(-2, 2) 
+            status_text = "受干扰悬停 ⚡"
+        else:
+            # 正常情况，无人机接近基地
+            current_distance -= 15.0 
+            status_text = "逼近中 🚨"
+
+        # 边界限制
+        if current_distance < 0:
+            current_distance = 0
+            status_text = "💥 已撞击基地! 💥"
+        if current_distance > 5000:
+            current_distance = 5000 # 飞太远就不管了
+
+        # --- 构造数据包发给 Qt ---
+        # 只有距离在 3000m 以内才显示在雷达上
+        drone_list = []
+        if 0 < current_distance < 3000:
+            drone_data = {
+                "uav_info": {
+                    "uav_id": uav_id,
+                    "model_name": "Mavic 3",
+                            
+                    # 【修改这里】把 0 改为 current_distance
+                    # 我们暂时用 "纬度" 字段来传递 "距离"
+                    "uav_lat": current_distance, 
+                            
+                    "uav_lng": 0,
+                    "freq": 2400.0
+                }
+            }
+            drone_list.append(drone_data)
+
+        # 这里有个小问题：你的 Qt 代码目前是写死 "800m" 的。
+        # 为了看到效果，你需要改一下 Qt 代码里的 slotUpdateTargets 
+        # 把模拟的 800m 改成动态计算，或者我们在 Python 端打印出来看自嗨一下
+        
+        # 发送数据
+        await sio.emit('droneStatus', drone_list)
+
+        # 控制台打印状态
+        print(f"无人机距离: {current_distance:.1f}m [{status_text}] | 干扰:{is_jamming} 诱骗:{is_spoofing}")
+
+        await asyncio.sleep(1) # 1秒刷新一次
+
+# === 启动入口 ===
+async def start_background_tasks(app):
+    app['udp_listener'] = asyncio.create_task(start_udp_server())
+    app['simulation'] = asyncio.create_task(drone_simulation_loop())
+
+async def start_udp_server():
+    loop = asyncio.get_running_loop()
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: UdpProtocol(),
+        local_addr=('127.0.0.1', 9099)
+    )
+    print("[UDP] 诱骗监听端口: 9099 Ready")
+    return transport
 
 if __name__ == '__main__':
-    t = threading.Thread(target=run_udp_server, daemon=True)
-    t.start()
-    try:
-        asyncio.run(start_server())
-    except KeyboardInterrupt: pass
+    app.on_startup.append(start_background_tasks)
+    web.run_app(app, port=8090)

@@ -115,7 +115,13 @@ void MainWindow::slotUpdateTargets(const QList<DroneInfo> &drones)
 
         ui->tblTargets->setItem(row, 0, new QTableWidgetItem(drone.id));
         ui->tblTargets->setItem(row, 1, new QTableWidgetItem(drone.model));
-        ui->tblTargets->setItem(row, 2, new QTableWidgetItem("800m")); // 模拟距离
+
+        // 【关键修改 1】读取 lat (模拟器把距离放在了 lat 字段里)
+        // 格式化为整数显示，例如 "1985m"
+        qDebug() << "UI收到数据 -> ID:" << drone.id << " 距离(Lat):" << drone.lat;
+
+        QString distStr = QString::number(drone.lat, 'f', 0) + "m";
+        ui->tblTargets->setItem(row, 2, new QTableWidgetItem(distStr));
 
         QTableWidgetItem *statusItem = new QTableWidgetItem("⚠️ 锁定");
         statusItem->setForeground(Qt::red);
@@ -128,14 +134,16 @@ void MainWindow::slotUpdateTargets(const QList<DroneInfo> &drones)
     for (const auto &d : drones) {
         RadarTarget t;
         t.id = d.id;
-        t.distance = 800.0; // 暂时用模拟距离 (实际应使用 lat/lon 计算)
 
-        // 简单的模拟方位生成：根据 ID 长度算个角度，让它在雷达上不一样
-        // 实际项目中这里应该是 GPS 方位角计算结果
+        // 【关键修改 2】把 lat 赋值给 distance，让雷达红点根据真实距离移动
+        t.distance = d.lat;
+
+        // 模拟方位：根据 ID 长度算个固定角度，保证同一个 ID 角度不变
         t.angle = (static_cast<int>(d.id.length()) * 50) % 360;
 
         radarTargets.append(t);
     }
+
     // 刷新雷达显示
     if (m_radar) {
         m_radar->updateTargets(radarTargets);
