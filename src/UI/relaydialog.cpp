@@ -36,10 +36,10 @@ void RelayDialog::setupUi()
     QGroupBox *grpMaster = new QGroupBox("全频段压制", this);
     QHBoxLayout *hbox = new QHBoxLayout(grpMaster);
 
-    QPushButton *btnAllOn = new QPushButton("🔥 全开 (ALL ON)", this);
+    QPushButton *btnAllOn = new QPushButton("全开 (ALL ON)", this);
     btnAllOn->setStyleSheet("background-color: #8B0000; color: white; font-weight: bold; padding: 10px;");
 
-    QPushButton *btnAllOff = new QPushButton("🛡️ 全关 (ALL OFF)", this);
+    QPushButton *btnAllOff = new QPushButton("全关 (ALL OFF)", this);
     btnAllOff->setStyleSheet("background-color: #2F4F4F; color: white; padding: 10px;");
 
     hbox->addWidget(btnAllOn);
