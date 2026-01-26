@@ -7,6 +7,7 @@
 #include "src/Backend/Drivers/detectiondriver.h"
 // 引入 JammerConfigData 定义
 #include "src/Backend/Drivers/jammerdriver.h"
+#include "src/UI/toggleswitch.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -47,6 +48,8 @@ private:
 
     // 这里使用了 RadarView 指针，必须要有上面的 class RadarView; 前置声明
     RadarView *m_radar;
+
+    ToggleSwitch *m_autoSwitch;
 
     void initConnections();
 };
