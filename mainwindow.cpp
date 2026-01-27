@@ -356,16 +356,18 @@ void MainWindow::slotUpdateDroneList(const QList<DroneInfo> &drones)
         m_droneListLayout->addWidget(createDroneCard(drone));
     }
 
-    // 3. 更新雷达显示
-    QList<RadarTarget> radarTargets;
+    // --- 3. 更新地图 ---
+    QList<RadarTarget> mapTargets;
     for (const auto &d : drones) {
         RadarTarget t;
         t.id = d.uav_id;
-        t.distance = d.distance;
+        // 【关键修改】不再传距离，而是传经纬度
+        t.lat = d.uav_lat;
+        t.lng = d.uav_lng;
         t.angle = d.azimuth;
-        radarTargets.append(t);
+        mapTargets.append(t);
     }
-    if (m_radar) m_radar->updateTargets(radarTargets);
+    if (m_radar) m_radar->updateTargets(mapTargets);
 
     // 4. 更新状态文字
     if (drones.isEmpty()) {
@@ -404,7 +406,12 @@ void MainWindow::slotUpdateAlertCount(int count)
 
 void MainWindow::slotUpdateDevicePos(double lat, double lng)
 {
-    // 预留接口：更新雷达中心坐标
+    // 将设备位置传给地图作为中心点
+    if (m_radar) {
+        // 如果正在拖拽地图，可能不希望强制居中，这里看你需求
+        // 简单起见，我们每次收到位置都居中
+        m_radar->setCenterPosition(lat, lng);
+    }
 }
 
 // ============================================================================
