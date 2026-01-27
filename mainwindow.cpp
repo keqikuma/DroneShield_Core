@@ -107,15 +107,22 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    // =============================================
     // 1. 布局比例设置
-    ui->gridLayout_Main->setColumnStretch(0, 1);
-    ui->gridLayout_Main->setColumnStretch(1, 2);
-    ui->gridLayout_Main->setColumnStretch(2, 1);
-    ui->gridLayout_Main->setRowStretch(0, 4);
-    ui->gridLayout_Main->setRowStretch(1, 1);
+    // =============================================
+    ui->gridLayout_Main->setColumnStretch(0, 1); // 左侧列表
+    ui->gridLayout_Main->setColumnStretch(1, 3); // 中间地图 (给大一点空间)
+    ui->gridLayout_Main->setColumnStretch(2, 1); // 右侧控制
+
+    ui->gridLayout_Main->setRowStretch(0, 4); // 主界面高度
+    ui->gridLayout_Main->setRowStretch(1, 1); // 日志高度
+
+    // 解除雷达高度限制，让它自适应填充
     // ui->groupBox_Radar->setMaximumHeight(450);
 
-    // 2. 初始化雷达控件
+    // =============================================
+    // 2. 初始化雷达控件 (天地图)
+    // =============================================
     m_radar = new RadarView(this);
     ui->groupBox_Radar->layout()->addWidget(m_radar);
     if (ui->widgetRadar) ui->widgetRadar->hide();
@@ -124,7 +131,7 @@ MainWindow::MainWindow(QWidget *parent)
     // 3. 重构左侧布局 (侦测目标 + Tab + 列表)
     // =============================================
 
-    // 3.0 清除 UI 文件中可能存在的旧控件
+    // 3.0 清除旧控件
     if (ui->groupBox_Targets->layout()) {
         QLayoutItem *item;
         while ((item = ui->groupBox_Targets->layout()->takeAt(0)) != nullptr) {
@@ -162,8 +169,8 @@ MainWindow::MainWindow(QWidget *parent)
         "}"
         );
     m_lblAlertCount->hide();
-
     headerLayout->addWidget(m_lblAlertCount);
+
     headerLayout->setContentsMargins(0, 0, 5, 0);
     leftMainLayout->addLayout(headerLayout);
 
@@ -188,7 +195,6 @@ MainWindow::MainWindow(QWidget *parent)
     m_droneListLayout->setContentsMargins(0, 0, 0, 0);
     m_droneListLayout->setSpacing(5);
     scrollDrone->setWidget(m_droneListContainer);
-
     tabWidget->addTab(scrollDrone, "无人机列表");
 
     // --- Tab 2: 图传/频谱 ---
@@ -203,13 +209,12 @@ MainWindow::MainWindow(QWidget *parent)
     m_imageListLayout->setContentsMargins(0, 0, 0, 0);
     m_imageListLayout->setSpacing(5);
     scrollImage->setWidget(m_imageListContainer);
-
     tabWidget->addTab(scrollImage, "图传/频谱");
 
     leftMainLayout->addWidget(tabWidget);
 
     // =============================================
-    // 4. 重构右侧布局
+    // 4. 重构右侧布局 (统一面板: 诱骗在上，干扰在下)
     // =============================================
 
     // A. 隐藏旧控件
@@ -217,24 +222,29 @@ MainWindow::MainWindow(QWidget *parent)
     ui->btnSpoof->hide();
     if (ui->line) ui->line->hide();
 
+    // 【关键】隐藏 UI 设计器里的 GroupBox，我们自己创建一个新的
+    ui->groupBox_Control->hide();
+
     // B. 创建右侧总容器
     QWidget *rightPanel = new QWidget(this);
     QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
     rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(15);
+    rightLayout->setSpacing(10);
 
-    // C. 顶部 Header
+    // C. 顶部 Header (系统状态 + 自动模式)
     QWidget *headerWidget = new QWidget(this);
     headerWidget->setStyleSheet("background-color: #1E1E1E; border-radius: 8px;");
     headerWidget->setFixedHeight(60);
     QHBoxLayout *headerTopLayout = new QHBoxLayout(headerWidget);
     headerTopLayout->setContentsMargins(15, 0, 15, 0);
 
+    // 移动系统状态标签
     ui->verticalLayout_3->removeWidget(ui->label_SystemStatus);
     ui->label_SystemStatus->setParent(headerWidget);
     headerTopLayout->addWidget(ui->label_SystemStatus);
     headerTopLayout->addStretch();
 
+    // 自动模式开关
     QLabel *lblAuto = new QLabel("自动接管模式", this);
     lblAuto->setStyleSheet("font-weight: bold; font-size: 14px; color: #E0E0E0;");
     headerTopLayout->addWidget(lblAuto);
@@ -246,84 +256,109 @@ MainWindow::MainWindow(QWidget *parent)
 
     rightLayout->addWidget(headerWidget);
 
-    // D. Control Box
-    ui->groupBox_Control->setMinimumWidth(0);
-    ui->groupBox_Control->setMaximumWidth(16777215);
-    QSizePolicy policy = ui->groupBox_Control->sizePolicy();
-    policy.setHorizontalPolicy(QSizePolicy::Expanding);
-    policy.setVerticalPolicy(QSizePolicy::Expanding);
-    ui->groupBox_Control->setSizePolicy(policy);
-    rightLayout->addWidget(ui->groupBox_Control, 1);
-
-    // E. 放入主布局
-    ui->gridLayout_Main->addWidget(rightPanel, 0, 2, 2, 1);
+    // =============================================
+    // D. 构建统一的 "作战控制" 面板
+    // =============================================
+    QGroupBox *controlGroup = new QGroupBox("作战控制", this);
+    controlGroup->setStyleSheet(
+        "QGroupBox { border: 1px solid #444; border-radius: 5px; margin-top: 20px; font-weight: bold; color: #00FF00; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 10px; }"
+        );
+    QVBoxLayout *ctrlLayout = new QVBoxLayout(controlGroup);
+    ctrlLayout->setContentsMargins(15, 25, 15, 15);
+    ctrlLayout->setSpacing(10);
 
     // =============================================
-    // F. 【修改核心】诱骗面板 (Spoof Panel) - CheckBox 版
+    // PART 1: 诱骗模式 (SPOOF)
     // =============================================
-    QWidget *spoofPanel = new QWidget(this);
-    QVBoxLayout *spoofLayout = new QVBoxLayout(spoofPanel);
-    spoofLayout->setContentsMargins(10, 5, 10, 15);
-    spoofLayout->setSpacing(10);
-
-    // F1. 标题
     QLabel *lblSpoofTitle = new QLabel("诱骗模式 (SPOOF)", this);
-    lblSpoofTitle->setStyleSheet("color: #00FF00; font-weight: bold; font-size: 13px;");
+    lblSpoofTitle->setStyleSheet("color: #00FF00; font-weight: bold; font-size: 13px; margin-bottom: 5px;");
     lblSpoofTitle->setAlignment(Qt::AlignCenter);
-    spoofLayout->addWidget(lblSpoofTitle);
+    ctrlLayout->addWidget(lblSpoofTitle);
 
+    // 线条 1 (诱骗标题下方)
     QFrame *line1 = new QFrame(this);
     line1->setFrameShape(QFrame::HLine);
-    line1->setStyleSheet("color: #444;");
-    spoofLayout->addWidget(line1);
+    line1->setStyleSheet("color: #444;"); // 实线
+    ctrlLayout->addWidget(line1);
 
-    // F2. 创建 5 个 QCheckBox
+    // 复选框
     QString chkStyle = "QCheckBox { color: #CCC; font-size: 14px; spacing: 8px; } QCheckBox::indicator { width: 18px; height: 18px; }";
 
     m_chkCircle = new QCheckBox("圆周驱离 (默认)", this);
     m_chkCircle->setStyleSheet(chkStyle);
-    spoofLayout->addWidget(m_chkCircle);
+    ctrlLayout->addWidget(m_chkCircle);
 
     m_chkNorth = new QCheckBox("定向驱离：北 (North)", this);
     m_chkNorth->setStyleSheet(chkStyle);
-    spoofLayout->addWidget(m_chkNorth);
+    ctrlLayout->addWidget(m_chkNorth);
 
     m_chkEast = new QCheckBox("定向驱离：东 (East)", this);
     m_chkEast->setStyleSheet(chkStyle);
-    spoofLayout->addWidget(m_chkEast);
+    ctrlLayout->addWidget(m_chkEast);
 
     m_chkSouth = new QCheckBox("定向驱离：南 (South)", this);
     m_chkSouth->setStyleSheet(chkStyle);
-    spoofLayout->addWidget(m_chkSouth);
+    ctrlLayout->addWidget(m_chkSouth);
 
     m_chkWest = new QCheckBox("定向驱离：西 (West)", this);
     m_chkWest->setStyleSheet(chkStyle);
-    spoofLayout->addWidget(m_chkWest);
+    ctrlLayout->addWidget(m_chkWest);
 
-    // 默认选中圆周
     m_chkCircle->setChecked(true);
 
-    // F3. 执行按钮
+    // 执行诱骗按钮
     m_btnExecuteSpoof = new QPushButton("开启诱骗 (EXECUTE)", this);
     m_btnExecuteSpoof->setCheckable(true);
     m_btnExecuteSpoof->setMinimumHeight(45);
     m_btnExecuteSpoof->setStyleSheet(
-        "QPushButton { background-color: #444; color: white; border-radius: 5px; font-weight: bold; font-size: 14px; margin-top: 15px; }"
+        "QPushButton { background-color: #444; color: white; border-radius: 5px; font-weight: bold; font-size: 14px; margin-top: 5px; }"
         "QPushButton:checked { background-color: #FF4500; color: white; }"
         );
-    spoofLayout->addWidget(m_btnExecuteSpoof);
+    ctrlLayout->addWidget(m_btnExecuteSpoof);
 
+    // =============================================
+    // PART 2: 干扰/压制 (JAMMING)
+    // =============================================
+
+    // 增加间距，把两个模块隔开
+    ctrlLayout->addSpacing(25);
+
+    // 标题
+    QLabel *lblJamTitle = new QLabel("干扰/压制 (JAMMING)", this);
+    lblJamTitle->setStyleSheet("color: #FFA500; font-weight: bold; font-size: 13px; margin-bottom: 5px;");
+    lblJamTitle->setAlignment(Qt::AlignCenter);
+    ctrlLayout->addWidget(lblJamTitle);
+
+    // 【修改点】线条 2 (现在移到了标题下方，且改为实线)
     QFrame *line2 = new QFrame(this);
     line2->setFrameShape(QFrame::HLine);
-    line2->setStyleSheet("color: #444; margin-top: 5px;");
-    spoofLayout->addWidget(line2);
+    line2->setStyleSheet("color: #444;"); // 与上面一致的实线样式
+    ctrlLayout->addWidget(line2);
 
-    // F4. 插入到 Control GroupBox
-    if (ui->verticalLayout_3) {
-        ui->verticalLayout_3->insertWidget(0, spoofPanel);
-        spoofPanel->show();
-    }
+    // 按钮组
+    ui->btnRelayControl->setParent(controlGroup);
+    ui->btnRelayControl->setMinimumHeight(40);
+    ctrlLayout->addWidget(ui->btnRelayControl);
 
+    ui->btnJammerConfig->setParent(controlGroup);
+    ui->btnJammerConfig->setMinimumHeight(40);
+    ctrlLayout->addWidget(ui->btnJammerConfig);
+
+    ui->btnJammer->setParent(controlGroup);
+    ui->btnJammer->setMinimumHeight(40);
+    ctrlLayout->addWidget(ui->btnJammer);
+
+    // 底部弹簧
+    ctrlLayout->addStretch();
+
+    // E. 放入主布局
+    rightLayout->addWidget(controlGroup);
+    ui->gridLayout_Main->addWidget(rightPanel, 0, 2, 2, 1);
+
+    // =============================================
+    // 5. 初始化信号连接
+    // =============================================
     initConnections();
 }
 
