@@ -40,7 +40,7 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
             this, &DeviceManager::onDevicePositionUpdated);
 
     // 注意：Node.js 后端通常运行在 3000 端口，如果配置不同请修改此处
-    m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, 3000);
+    m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, 8090);
 
     // 4. 压制 (Relay TCP)
     m_relayDriver = new RelayDriver(this);

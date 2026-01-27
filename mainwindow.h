@@ -8,13 +8,14 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QCheckBox> // 【必须引入】
 
-// 引入新的统一数据结构
+// 引入统一数据结构
 #include "src/Backend/DataStructs.h"
 
 // 引入自定义控件
 #include "src/UI/toggleswitch.h"
-#include "src/Backend/Drivers/jammerdriver.h" // 只要 JammerConfigData
+#include "src/Backend/Drivers/jammerdriver.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -32,8 +33,6 @@ public:
 
 public slots:
     void slotUpdateLog(const QString &msg);
-
-    // === 新的侦测数据槽函数 ===
     void slotUpdateDroneList(const QList<DroneInfo> &drones);
     void slotUpdateImageList(const QList<ImageInfo> &images);
     void slotUpdateAlertCount(int count);
@@ -58,27 +57,31 @@ signals:
 private:
     Ui::MainWindow *ui;
     RadarView *m_radar;
-    ToggleSwitch *m_autoSwitch;
+    ToggleSwitch *m_autoSwitch; // 自动模式保留开关样式
 
     // === 左侧侦测面板控件 ===
-    QLabel *m_lblAlertCount;        // 红色告警数字
-    QWidget *m_droneListContainer;  // 无人机列表容器
-    QVBoxLayout *m_droneListLayout; // 无人机列表布局
-    QWidget *m_imageListContainer;  // 图传列表容器
-    QVBoxLayout *m_imageListLayout; // 图传列表布局
+    QLabel *m_lblAlertCount;
+    QWidget *m_droneListContainer;
+    QVBoxLayout *m_droneListLayout;
+    QWidget *m_imageListContainer;
+    QVBoxLayout *m_imageListLayout;
 
-    // === 右侧诱骗控制控件 ===
-    ToggleSwitch *m_tsCircle;
-    ToggleSwitch *m_tsNorth;
-    ToggleSwitch *m_tsEast;
-    ToggleSwitch *m_tsSouth;
-    ToggleSwitch *m_tsWest;
+    // === 【关键修改】右侧诱骗控制控件 (改为 QCheckBox) ===
+    // 之前报错是因为头文件里还是 ToggleSwitch *m_ts...
+    QCheckBox *m_chkCircle;
+    QCheckBox *m_chkNorth;
+    QCheckBox *m_chkEast;
+    QCheckBox *m_chkSouth;
+    QCheckBox *m_chkWest;
+
     QPushButton *m_btnExecuteSpoof;
 
     void initConnections();
-    void handleSpoofToggleMutex(ToggleSwitch* current);
 
-    // === 辅助函数：创建卡片 UI ===
+    // 【关键修改】函数名和参数类型
+    void handleSpoofCheckBoxMutex(QCheckBox* current);
+
+    // === 辅助函数 ===
     QWidget* createDroneCard(const DroneInfo &info);
     QWidget* createImageCard(const ImageInfo &info);
     QWidget* createInfoRow(const QString &label, const QString &value, bool isHighlight = false);

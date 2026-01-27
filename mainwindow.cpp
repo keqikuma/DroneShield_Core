@@ -8,6 +8,7 @@
 #include <QGroupBox>
 #include <QScrollArea>
 #include <QTabWidget>
+#include <QCheckBox>
 
 #include "src/UI/radarview.h"
 #include "src/UI/jammerconfdialog.h"
@@ -66,9 +67,6 @@ QWidget* MainWindow::createDroneCard(const DroneInfo &info) {
     layout->addWidget(createInfoRow("白名单:", info.whiteList ? "是" : "否"));
     layout->addWidget(createInfoRow("UUID:", info.uuid));
 
-    // 图片索引 (可选显示)
-    // layout->addWidget(createInfoRow("图标Idx:", QString::number(info.img)));
-
     return card;
 }
 
@@ -109,24 +107,15 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // =============================================
-    // 1. 布局比例设置 (修复宽度问题的关键)
-    // =============================================
-
-    // 强制三列等宽 (1:1:1)
+    // 1. 布局比例设置
     ui->gridLayout_Main->setColumnStretch(0, 1);
     ui->gridLayout_Main->setColumnStretch(1, 1);
     ui->gridLayout_Main->setColumnStretch(2, 1);
-
-    // 行比例
     ui->gridLayout_Main->setRowStretch(0, 2);
     ui->gridLayout_Main->setRowStretch(1, 3);
-
     ui->groupBox_Radar->setMaximumHeight(450);
 
-    // =============================================
     // 2. 初始化雷达控件
-    // =============================================
     m_radar = new RadarView(this);
     ui->groupBox_Radar->layout()->addWidget(m_radar);
     if (ui->widgetRadar) ui->widgetRadar->hide();
@@ -152,41 +141,34 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 3.2 顶部 Header (弹簧 + 文字 + 红点)
     QHBoxLayout *headerLayout = new QHBoxLayout();
-
-    // 添加弹簧，把后面内容顶到最右边
     headerLayout->addStretch();
 
-    // "告警数量" 文字提示
     QLabel *lblAlertTip = new QLabel("告警数量:", this);
     lblAlertTip->setStyleSheet("color: #AAAAAA; font-size: 12px; font-weight: bold; margin-right: 5px;");
     headerLayout->addWidget(lblAlertTip);
 
-    // 红色数字胶囊
     m_lblAlertCount = new QLabel("0", this);
     m_lblAlertCount->setStyleSheet(
         "QLabel {"
         "  background-color: #FF0000;"
         "  color: white;"
-        "  border-radius: 9px;"       // 圆形/椭圆背景
-        "  padding: 0px 6px;"         // 左右内边距
+        "  border-radius: 9px;"
+        "  padding: 0px 6px;"
         "  font-weight: bold;"
         "  font-size: 12px;"
-        "  min-height: 18px;"         // 固定高度
-        "  min-width: 14px;"          // 最小宽度
-        "  qproperty-alignment: AlignCenter;" // 文字居中
+        "  min-height: 18px;"
+        "  min-width: 14px;"
+        "  qproperty-alignment: AlignCenter;"
         "}"
         );
-    m_lblAlertCount->hide(); // 默认隐藏，有数据才显示
+    m_lblAlertCount->hide();
 
     headerLayout->addWidget(m_lblAlertCount);
-
-    // 设置边距，防止贴边太紧
     headerLayout->setContentsMargins(0, 0, 5, 0);
     leftMainLayout->addLayout(headerLayout);
 
     // 3.3 Tab 切换页
     QTabWidget *tabWidget = new QTabWidget(this);
-    // Tab 样式优化
     tabWidget->setStyleSheet(
         "QTabWidget::pane { border: 1px solid #444; top: -1px; background: #1E1E1E; }"
         "QTabBar::tab { background: #2D2D2D; color: #AAA; padding: 8px 20px; border: 1px solid #444; border-bottom: none; }"
@@ -202,7 +184,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_droneListContainer = new QWidget();
     m_droneListContainer->setStyleSheet("background: transparent;");
     m_droneListLayout = new QVBoxLayout(m_droneListContainer);
-    m_droneListLayout->setAlignment(Qt::AlignTop); // 顶部对齐
+    m_droneListLayout->setAlignment(Qt::AlignTop);
     m_droneListLayout->setContentsMargins(0, 0, 0, 0);
     m_droneListLayout->setSpacing(5);
     scrollDrone->setWidget(m_droneListContainer);
@@ -217,7 +199,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_imageListContainer = new QWidget();
     m_imageListContainer->setStyleSheet("background: transparent;");
     m_imageListLayout = new QVBoxLayout(m_imageListContainer);
-    m_imageListLayout->setAlignment(Qt::AlignTop); // 顶部对齐
+    m_imageListLayout->setAlignment(Qt::AlignTop);
     m_imageListLayout->setContentsMargins(0, 0, 0, 0);
     m_imageListLayout->setSpacing(5);
     scrollImage->setWidget(m_imageListContainer);
@@ -227,7 +209,7 @@ MainWindow::MainWindow(QWidget *parent)
     leftMainLayout->addWidget(tabWidget);
 
     // =============================================
-    // 4. 重构右侧布局 (保持原有的 ToggleSwitch 逻辑)
+    // 4. 重构右侧布局
     // =============================================
 
     // A. 隐藏旧控件
@@ -241,20 +223,18 @@ MainWindow::MainWindow(QWidget *parent)
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(15);
 
-    // C. 顶部 Header (系统状态 + 自动模式)
+    // C. 顶部 Header
     QWidget *headerWidget = new QWidget(this);
     headerWidget->setStyleSheet("background-color: #1E1E1E; border-radius: 8px;");
     headerWidget->setFixedHeight(60);
     QHBoxLayout *headerTopLayout = new QHBoxLayout(headerWidget);
     headerTopLayout->setContentsMargins(15, 0, 15, 0);
 
-    // 移动系统状态标签
     ui->verticalLayout_3->removeWidget(ui->label_SystemStatus);
     ui->label_SystemStatus->setParent(headerWidget);
     headerTopLayout->addWidget(ui->label_SystemStatus);
     headerTopLayout->addStretch();
 
-    // 自动模式标签与开关
     QLabel *lblAuto = new QLabel("自动接管模式", this);
     lblAuto->setStyleSheet("font-weight: bold; font-size: 14px; color: #E0E0E0;");
     headerTopLayout->addWidget(lblAuto);
@@ -266,8 +246,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     rightLayout->addWidget(headerWidget);
 
-    // D. 处理 Control Box
-    // 移除最大宽度限制，设为 Expanding
+    // D. Control Box
     ui->groupBox_Control->setMinimumWidth(0);
     ui->groupBox_Control->setMaximumWidth(16777215);
     QSizePolicy policy = ui->groupBox_Control->sizePolicy();
@@ -279,11 +258,13 @@ MainWindow::MainWindow(QWidget *parent)
     // E. 放入主布局
     ui->gridLayout_Main->addWidget(rightPanel, 0, 2, 2, 1);
 
-    // F. 构建诱骗面板 (Spoof Panel)
+    // =============================================
+    // F. 【修改核心】诱骗面板 (Spoof Panel) - CheckBox 版
+    // =============================================
     QWidget *spoofPanel = new QWidget(this);
     QVBoxLayout *spoofLayout = new QVBoxLayout(spoofPanel);
-    spoofLayout->setContentsMargins(0, 5, 0, 15);
-    spoofLayout->setSpacing(8);
+    spoofLayout->setContentsMargins(10, 5, 10, 15);
+    spoofLayout->setSpacing(10);
 
     // F1. 标题
     QLabel *lblSpoofTitle = new QLabel("诱骗模式 (SPOOF)", this);
@@ -293,46 +274,47 @@ MainWindow::MainWindow(QWidget *parent)
 
     QFrame *line1 = new QFrame(this);
     line1->setFrameShape(QFrame::HLine);
-    line1->setFrameShadow(QFrame::Sunken);
     line1->setStyleSheet("color: #444;");
     spoofLayout->addWidget(line1);
 
-    // F2. 创建 5 个模式开关
-    auto createRow = [this, spoofLayout](QString text, ToggleSwitch*& ptr) {
-        QWidget *rowWidget = new QWidget(this);
-        QHBoxLayout *rowLayout = new QHBoxLayout(rowWidget);
-        rowLayout->setContentsMargins(10, 2, 10, 2);
-        QLabel *lbl = new QLabel(text, this);
-        lbl->setStyleSheet("font-size: 13px; color: #CCC;");
-        ptr = new ToggleSwitch(this);
-        ptr->setFixedSize(50, 28);
-        rowLayout->addWidget(lbl);
-        rowLayout->addStretch();
-        rowLayout->addWidget(ptr);
-        spoofLayout->addWidget(rowWidget);
-    };
+    // F2. 创建 5 个 QCheckBox
+    QString chkStyle = "QCheckBox { color: #CCC; font-size: 14px; spacing: 8px; } QCheckBox::indicator { width: 18px; height: 18px; }";
 
-    createRow("圆周驱离 (默认)", m_tsCircle);
-    createRow("定向驱离：东 (E)", m_tsEast);
-    createRow("定向驱离：南 (S)", m_tsSouth);
-    createRow("定向驱离：西 (W)", m_tsWest);
-    createRow("定向驱离：北 (N)", m_tsNorth);
+    m_chkCircle = new QCheckBox("圆周驱离 (默认)", this);
+    m_chkCircle->setStyleSheet(chkStyle);
+    spoofLayout->addWidget(m_chkCircle);
 
-    m_tsCircle->setChecked(true); // 默认选中
+    m_chkNorth = new QCheckBox("定向驱离：北 (North)", this);
+    m_chkNorth->setStyleSheet(chkStyle);
+    spoofLayout->addWidget(m_chkNorth);
+
+    m_chkEast = new QCheckBox("定向驱离：东 (East)", this);
+    m_chkEast->setStyleSheet(chkStyle);
+    spoofLayout->addWidget(m_chkEast);
+
+    m_chkSouth = new QCheckBox("定向驱离：南 (South)", this);
+    m_chkSouth->setStyleSheet(chkStyle);
+    spoofLayout->addWidget(m_chkSouth);
+
+    m_chkWest = new QCheckBox("定向驱离：西 (West)", this);
+    m_chkWest->setStyleSheet(chkStyle);
+    spoofLayout->addWidget(m_chkWest);
+
+    // 默认选中圆周
+    m_chkCircle->setChecked(true);
 
     // F3. 执行按钮
     m_btnExecuteSpoof = new QPushButton("开启诱骗 (EXECUTE)", this);
     m_btnExecuteSpoof->setCheckable(true);
-    m_btnExecuteSpoof->setMinimumHeight(40);
+    m_btnExecuteSpoof->setMinimumHeight(45);
     m_btnExecuteSpoof->setStyleSheet(
-        "QPushButton { background-color: #444; color: white; border-radius: 5px; font-weight: bold; font-size: 14px; margin-top: 10px; }"
+        "QPushButton { background-color: #444; color: white; border-radius: 5px; font-weight: bold; font-size: 14px; margin-top: 15px; }"
         "QPushButton:checked { background-color: #FF4500; color: white; }"
         );
     spoofLayout->addWidget(m_btnExecuteSpoof);
 
     QFrame *line2 = new QFrame(this);
     line2->setFrameShape(QFrame::HLine);
-    line2->setFrameShadow(QFrame::Sunken);
     line2->setStyleSheet("color: #444; margin-top: 5px;");
     spoofLayout->addWidget(line2);
 
@@ -342,12 +324,8 @@ MainWindow::MainWindow(QWidget *parent)
         spoofPanel->show();
     }
 
-    // =============================================
-    // 5. 初始化信号连接
-    // =============================================
     initConnections();
 }
-
 
 MainWindow::~MainWindow()
 {
@@ -364,7 +342,6 @@ void MainWindow::slotUpdateLog(const QString &msg)
     ui->textLog->append(timeStr + msg);
 }
 
-// 核心：更新无人机列表卡片
 void MainWindow::slotUpdateDroneList(const QList<DroneInfo> &drones)
 {
     // 1. 清空当前列表
@@ -385,7 +362,6 @@ void MainWindow::slotUpdateDroneList(const QList<DroneInfo> &drones)
         RadarTarget t;
         t.id = d.uav_id;
         t.distance = d.distance;
-        // 注意：这里假设 azimuth 是以正北为 0 度的真实方位
         t.angle = d.azimuth;
         radarTargets.append(t);
     }
@@ -401,7 +377,6 @@ void MainWindow::slotUpdateDroneList(const QList<DroneInfo> &drones)
     }
 }
 
-// 核心：更新图传列表卡片
 void MainWindow::slotUpdateImageList(const QList<ImageInfo> &images)
 {
     // 1. 清空
@@ -417,7 +392,6 @@ void MainWindow::slotUpdateImageList(const QList<ImageInfo> &images)
     }
 }
 
-// 核心：更新告警红点
 void MainWindow::slotUpdateAlertCount(int count)
 {
     m_lblAlertCount->setText(QString::number(count));
@@ -428,31 +402,29 @@ void MainWindow::slotUpdateAlertCount(int count)
     }
 }
 
-// 核心：更新设备自身定位 (传给雷达)
 void MainWindow::slotUpdateDevicePos(double lat, double lng)
 {
-    // 如果 RadarView 有设置中心点的接口，可以在这里调用
-    // 例如: m_radar->setCenterLocation(lat, lng);
-    // 目前仅做日志打印，证明数据通了
-    // qDebug() << "[GPS] Device Position Updated:" << lat << lng;
+    // 预留接口：更新雷达中心坐标
 }
 
 // ============================================================================
-// 交互逻辑 (保持不变)
+// 交互逻辑
 // ============================================================================
 
-void MainWindow::handleSpoofToggleMutex(ToggleSwitch* current)
+// 【修改】互斥逻辑：CheckBox 版本
+void MainWindow::handleSpoofCheckBoxMutex(QCheckBox* current)
 {
     if (current->isChecked()) {
-        if (current != m_tsCircle) m_tsCircle->setChecked(false);
-        if (current != m_tsNorth)  m_tsNorth->setChecked(false);
-        if (current != m_tsEast)   m_tsEast->setChecked(false);
-        if (current != m_tsSouth)  m_tsSouth->setChecked(false);
-        if (current != m_tsWest)   m_tsWest->setChecked(false);
+        if (current != m_chkCircle) m_chkCircle->setChecked(false);
+        if (current != m_chkNorth)  m_chkNorth->setChecked(false);
+        if (current != m_chkEast)   m_chkEast->setChecked(false);
+        if (current != m_chkSouth)  m_chkSouth->setChecked(false);
+        if (current != m_chkWest)   m_chkWest->setChecked(false);
     } else {
-        if (!m_tsCircle->isChecked() && !m_tsNorth->isChecked() &&
-            !m_tsEast->isChecked() && !m_tsSouth->isChecked() && !m_tsWest->isChecked()) {
-            m_tsCircle->setChecked(true);
+        // 如果当前被取消勾选，且没有其他被选中（确保至少选一个），则强制选回圆周
+        if (!m_chkCircle->isChecked() && !m_chkNorth->isChecked() &&
+            !m_chkEast->isChecked() && !m_chkSouth->isChecked() && !m_chkWest->isChecked()) {
+            m_chkCircle->setChecked(true);
         }
     }
 }
@@ -464,20 +436,23 @@ void MainWindow::initConnections()
         slotUpdateLog(checked ? ">>> [模式] 切换至自动接管 (AUTO)" : ">>> [模式] 切换至手动操作 (MANUAL)");
     });
 
-    connect(m_tsCircle, &ToggleSwitch::toggled, this, [this](){ handleSpoofToggleMutex(m_tsCircle); });
-    connect(m_tsNorth,  &ToggleSwitch::toggled, this, [this](){ handleSpoofToggleMutex(m_tsNorth); });
-    connect(m_tsEast,   &ToggleSwitch::toggled, this, [this](){ handleSpoofToggleMutex(m_tsEast); });
-    connect(m_tsSouth,  &ToggleSwitch::toggled, this, [this](){ handleSpoofToggleMutex(m_tsSouth); });
-    connect(m_tsWest,   &ToggleSwitch::toggled, this, [this](){ handleSpoofToggleMutex(m_tsWest); });
+    // 【修改】连接 CheckBox 的 toggled 信号
+    connect(m_chkCircle, &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkCircle); });
+    connect(m_chkNorth,  &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkNorth); });
+    connect(m_chkEast,   &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkEast); });
+    connect(m_chkSouth,  &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkSouth); });
+    connect(m_chkWest,   &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkWest); });
 
+    // 【修改】执行按钮逻辑：检查 CheckBox 状态
     connect(m_btnExecuteSpoof, &QPushButton::toggled, this, [this](bool checked){
         if (checked) {
             m_btnExecuteSpoof->setText("停止诱骗 (STOP)");
-            if (m_tsCircle->isChecked()) { emit sigManualSpoofCircle(); slotUpdateLog(">>> [指令] 启动诱骗 -> 圆周模式"); }
-            else if (m_tsNorth->isChecked()) { emit sigManualSpoofNorth(); slotUpdateLog(">>> [指令] 启动诱骗 -> 北 (N)"); }
-            else if (m_tsEast->isChecked())  { emit sigManualSpoofEast();  slotUpdateLog(">>> [指令] 启动诱骗 -> 东 (E)"); }
-            else if (m_tsSouth->isChecked()) { emit sigManualSpoofSouth(); slotUpdateLog(">>> [指令] 启动诱骗 -> 南 (S)"); }
-            else if (m_tsWest->isChecked())  { emit sigManualSpoofWest();  slotUpdateLog(">>> [指令] 启动诱骗 -> 西 (W)"); }
+            // 判断哪个被勾选
+            if (m_chkCircle->isChecked()) { emit sigManualSpoofCircle(); slotUpdateLog(">>> [指令] 启动诱骗 -> 圆周模式"); }
+            else if (m_chkNorth->isChecked()) { emit sigManualSpoofNorth(); slotUpdateLog(">>> [指令] 启动诱骗 -> 北 (N)"); }
+            else if (m_chkEast->isChecked())  { emit sigManualSpoofEast();  slotUpdateLog(">>> [指令] 启动诱骗 -> 东 (E)"); }
+            else if (m_chkSouth->isChecked()) { emit sigManualSpoofSouth(); slotUpdateLog(">>> [指令] 启动诱骗 -> 南 (S)"); }
+            else if (m_chkWest->isChecked())  { emit sigManualSpoofWest();  slotUpdateLog(">>> [指令] 启动诱骗 -> 西 (W)"); }
         } else {
             m_btnExecuteSpoof->setText("开启诱骗 (EXECUTE)");
             emit sigManualSpoof(false);
