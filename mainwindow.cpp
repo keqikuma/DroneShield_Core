@@ -109,10 +109,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 1. 布局比例设置
     ui->gridLayout_Main->setColumnStretch(0, 1);
-    ui->gridLayout_Main->setColumnStretch(1, 1);
+    ui->gridLayout_Main->setColumnStretch(1, 2);
     ui->gridLayout_Main->setColumnStretch(2, 1);
-    ui->gridLayout_Main->setRowStretch(0, 2);
-    ui->gridLayout_Main->setRowStretch(1, 3);
+    ui->gridLayout_Main->setRowStretch(0, 4);
+    ui->gridLayout_Main->setRowStretch(1, 1);
     ui->groupBox_Radar->setMaximumHeight(450);
 
     // 2. 初始化雷达控件

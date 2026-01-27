@@ -48,6 +48,7 @@ RadarView::RadarView(QWidget *parent) : QWidget(parent)
 
     // 交互状态标记
     m_isDragging = false;
+    m_wheelAccumulator = 0; // 初始化为0
 }
 
 RadarView::~RadarView() {}
@@ -312,12 +313,36 @@ void RadarView::mouseMoveEvent(QMouseEvent *event)
 
 void RadarView::wheelEvent(QWheelEvent *event)
 {
-    if (event->angleDelta().y() > 0) {
-        if (m_zoomLevel < 18) m_zoomLevel++;
-    } else {
-        if (m_zoomLevel > 1) m_zoomLevel--;
+    // 累加滚轮的数值 (Mac上轻轻一滑可能是 +5, +10，普通鼠标一格是 +120)
+    m_wheelAccumulator += event->angleDelta().y();
+
+    // 设定阈值：每 120 度算一级 (标准鼠标一格)
+    int steps = 0;
+    if (m_wheelAccumulator >= 120) {
+        steps = 1;
+        m_wheelAccumulator = 0; // 清零，或者减去120 (m_wheelAccumulator -= 120) 以保持惯性
+    } else if (m_wheelAccumulator <= -120) {
+        steps = -1;
+        m_wheelAccumulator = 0;
     }
-    // 缩放后清空缓存，或者保留缓存等待新缩放级别的下载
-    // m_tileCache.clear(); // 可选：清空省内存，不清空体验好
-    update();
+
+    // 只有当积累够了一级，才执行缩放
+    if (steps != 0) {
+        int newZoom = m_zoomLevel + steps;
+
+        // 限制范围 1 ~ 18
+        if (newZoom < 1) newZoom = 1;
+        if (newZoom > 18) newZoom = 18;
+
+        if (newZoom != m_zoomLevel) {
+            m_zoomLevel = newZoom;
+            update(); // 刷新重绘
+
+            // 可选：在这里打印一下当前的 zoom，方便调试
+            // qDebug() << "Current Zoom:" << m_zoomLevel;
+        }
+    }
+
+    // 接受事件，不再传递给父控件
+    event->accept();
 }

@@ -64,6 +64,9 @@ private:
     double m_centerLat;    // 中心纬度
     double m_centerLng;    // 中心经度
 
+    // 滚轮
+    int m_wheelAccumulator;
+
     // --- 缓存 ---
     QNetworkAccessManager *m_netManager;
     QHash<TileCoord, QPixmap> m_tileCache; // 内存缓存瓦片
