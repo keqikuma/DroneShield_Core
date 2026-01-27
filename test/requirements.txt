@@ -1,0 +1,7 @@
+python-socketio
+python-engineio
+eventlet
+flask
+pyserial
+requests
+colorama
