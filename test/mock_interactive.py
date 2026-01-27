@@ -3,30 +3,26 @@ import socketio
 from aiohttp import web
 import json
 import random
+import time
+import math
 
 # ==========================================
-# 全局配置与状态
+# 全局配置
 # ==========================================
 # 初始距离 (米)
-current_distance = 1000.0  
-is_jamming = False         # 干扰状态 (Linux板卡)
-is_spoofing = False        # 诱骗状态
-uav_id = "DJI_Mavic_3_Pro"
+current_distance = 2000.0  
+is_jamming = False         
+is_spoofing = False        
+uav_id = "1636J1400AAXML"  # 模拟 Mavic 2 ID
 
-# 基地坐标 (必须与 C++ Consts.h 保持一致)
-BASE_LAT = 31.2304
-BASE_LON = 121.4737
+# 基地坐标 (西安大华 - 对应你提供的代码)
+BASE_LAT = 34.218146
+BASE_LON = 108.834316
 
 # ==========================================
-# 1. Socket.IO Server (侦测数据下发)
+# 1. Socket.IO Server Setup
 # ==========================================
-# ping_timeout=60: 防止频繁断开
-sio = socketio.AsyncServer(
-    async_mode='aiohttp', 
-    cors_allowed_origins='*', 
-    ping_timeout=60, 
-    ping_interval=25
-)
+sio = socketio.AsyncServer(async_mode='aiohttp', cors_allowed_origins='*')
 app = web.Application()
 sio.attach(app)
 
@@ -34,208 +30,142 @@ sio.attach(app)
 async def connect(sid, environ):
     print(f"[SocketIO] Client connected (SID: {sid})")
 
-@sio.event
-async def disconnect(sid):
-    print("[SocketIO] Client disconnected")
-
 # ==========================================
-# 2. HTTP Server (Linux 干扰板卡模拟)
+# 2. HTTP Server (干扰模拟)
 # ==========================================
-
-# 接口: 设置频率参数
 async def handle_set_write_freq(request):
-    try:
-        data = await request.json()
-        freq_list = data.get('writeFreq', [])
-        
-        print("-" * 40)
-        print(f"[HTTP] Config Received (/setWriteFreq):")
-        if not freq_list:
-            print("   [WARN] Empty configuration list")
-        
-        for item in freq_list:
-            board_id = item.get('freqType', '?')
-            start_f = item.get('startFreq', 0)
-            end_f = item.get('endFreq', 0)
-            enable = item.get('isSelect', 0)
-            status_str = "ENABLED" if enable == 1 else "DISABLED"
-            print(f"   > Board {board_id}: {start_f}MHz - {end_f}MHz [{status_str}]")
-        print("-" * 40)
-        
-        return web.json_response({'status': 'ok', 'msg': 'Params updated'})
-    except Exception as e:
-        print(f"[ERROR] /setWriteFreq failed: {e}")
-        return web.json_response({'status': 'error'}, status=500)
+    print(f"[HTTP] Received Frequency Config")
+    return web.json_response({'status': 'ok'})
 
-# 接口: 干扰开关控制
 async def handle_interference_control(request):
     global is_jamming
-    try:
-        data = await request.json()
-        cmd = data.get('switch', 0)
-        
-        if cmd == 1:
-            is_jamming = True
-            print(f"[HTTP] Jammer Control -> ON")
-            print("   [INFO] Drone halted (Jamming Active)")
-        else:
-            is_jamming = False
-            print(f"[HTTP] Jammer Control -> OFF")
-            
-        return web.json_response({'status': 'ok'})
-    except Exception as e:
-        print(f"[ERROR] /interferenceControl failed: {e}")
-        return web.json_response({'status': 'error'}, status=500)
+    data = await request.json()
+    if data.get('switch', 0) == 1:
+        is_jamming = True
+        print(f"[HTTP] Jammer -> ON (Drone Hovering)")
+    else:
+        is_jamming = False
+        print(f"[HTTP] Jammer -> OFF")
+    return web.json_response({'status': 'ok'})
 
 app.router.add_post('/setWriteFreq', handle_set_write_freq)
 app.router.add_post('/interferenceControl', handle_interference_control)
 
 # ==========================================
-# 3. UDP Server (诱骗设备模拟)
+# 3. UDP Server (诱骗模拟)
 # ==========================================
 class UdpProtocol:
     def connection_made(self, transport):
         self.transport = transport
-
     def datagram_received(self, data, addr):
         global is_spoofing
-        try:
-            message = data.decode()
-            # 简单解析 JSON 字符串
-            if '"iSwitch":1' in message:
-                if not is_spoofing:
-                    is_spoofing = True
-                    print("[UDP] Spoof Command -> ON (Drone Repelling)")
-            elif '"iSwitch":0' in message:
-                if is_spoofing:
-                    is_spoofing = False
-                    print("[UDP] Spoof Command -> OFF")
-        except Exception as e:
-            print(f"[ERROR] UDP Decode failed: {e}")
+        msg = data.decode(errors='ignore')
+        if '"iSwitch":1' in msg:
+            is_spoofing = True
+            print("[UDP] Spoof -> ON (Drone Repelling)")
+        elif '"iSwitch":0' in msg:
+            is_spoofing = False
+            print("[UDP] Spoof -> OFF")
 
 # ==========================================
-# 4. TCP Server (继电器压制模拟)
+# 4. 物理引擎与数据生成 (核心)
 # ==========================================
-async def handle_relay_client(reader, writer):
-    addr = writer.get_extra_info('peername')
-    print(f"[RELAY] TCP Connection from {addr}")
-    
-    try:
-        while True:
-            data = await reader.read(1024)
-            if not data:
-                break
-            
-            hex_str = data.hex().upper()
-            
-            # 解析协议
-            if hex_str.startswith("FE0F"):
-                # 全开/全关指令
-                status = "ALL ON (FIRE)" if "FF" in hex_str else "ALL OFF"
-                print(f"[RELAY] Command: {status} | Raw: {hex_str}")
-            elif hex_str.startswith("FE05"):
-                # 单路控制指令 FE 05 00 XX ...
-                try:
-                    channel_hex = hex_str[6:8]
-                    channel_id = int(channel_hex, 16) + 1
-                    state = "ON" if "FF00" in hex_str else "OFF"
-                    print(f"[RELAY] Command: Channel {channel_id} -> {state} | Raw: {hex_str}")
-                except:
-                    print(f"[RELAY] Parse Error: {hex_str}")
-            else:
-                print(f"[RELAY] Unknown Data: {hex_str}")
-                
-    except Exception as e:
-        print(f"[RELAY] Connection Error: {e}")
-    finally:
-        print("[RELAY] Client disconnected")
-        writer.close()
-
-# ==========================================
-# 5. 核心物理引擎 (模拟循环)
-# ==========================================
-async def drone_simulation_loop():
+async def simulation_loop():
     global current_distance, is_jamming, is_spoofing
     
-    print("[SIM] Simulation Engine Started. Drone approaching...")
+    print("[SIM] 物理引擎启动，等待连接...")
     
     while True:
-        # --- 物理状态计算 ---
-        status_text = "APPROACHING"
-        
+        # 1. 物理运动计算
         if is_spoofing:
-            # 诱骗开启：驱离 (距离增加)
-            current_distance += 30.0 
-            status_text = "REPELLING (SPOOF)"
+            current_distance += 40.0 # 驱离：快速远离
         elif is_jamming:
-            # 干扰开启：悬停 (距离波动)
-            current_distance += random.uniform(-2, 2) 
-            status_text = "HOVERING (JAMMED)"
+            current_distance += random.uniform(-1, 1) # 干扰：悬停抖动
         else:
-            # 正常：逼近 (距离减少)
-            current_distance -= 15.0 
-            status_text = "APPROACHING"
+            current_distance -= 10.0 # 正常：靠近
+            
+        # 边界处理
+        if current_distance < 0: current_distance = 0
+        if current_distance > 5000: current_distance = 5000
 
-        # 边界限制
-        if current_distance < 0:
-            current_distance = 0
-            status_text = "IMPACT"
-        if current_distance > 5000:
-            current_distance = 5000 
-
-        # --- 坐标转换 (距离 -> 真实经纬度) ---
-        # 假设从正北方向飞来 (纬度变化，经度不变)
-        # 1度纬度 ≈ 111,000 米
+        # 2. 坐标计算 (假设从正北方向 0度 飞来)
+        # 纬度每度 ≈ 111km -> 1m ≈ 1/111000 度
         lat_offset = current_distance / 111000.0
-        real_lat = BASE_LAT + lat_offset
-        real_lon = BASE_LON 
-
-        # --- 发送数据包 ---
-        drone_list = []
-        # 雷达量程假设 3000m
+        
+        real_uav_lat = BASE_LAT + lat_offset
+        real_uav_lon = BASE_LON + (random.uniform(-0.0001, 0.0001)) # 加点抖动
+        
+        # 3. 构建全量无人机数据 (droneStatus)
+        drone_data = []
+        # 在 3000米范围内才显示
         if 0 < current_distance < 3000:
-            drone_data = {
+            drone_info = {
                 "uav_info": {
                     "uav_id": uav_id,
-                    "model_name": "Mavic 3",
-                    "uav_lat": real_lat, 
-                    "uav_lng": real_lon,
-                    "freq": 2400.0
-                }
+                    "model_name": "Mavic 2",
+                    "distance": round(current_distance, 1),
+                    "azimuth": 0, # 正北
+                    "uav_lat": real_uav_lat,
+                    "uav_lng": real_uav_lon,
+                    "height": 120.5,
+                    "freq": 2400.0, # MHz
+                    "velocity": "South 10.0 m/s",
+                    "pilot_lat": BASE_LAT + 0.001, # 假设飞手在基地附近
+                    "pilot_lng": BASE_LON + 0.001,
+                    "pilot_distance": 150.0,
+                    "whiteList": False,
+                    "uuid": "uuid-sim-123456",
+                    "img": 1,
+                    "type": "drone"
+                },
+                # 轨迹点 (可选)
+                "uav_points": [[real_uav_lat, real_uav_lon]], 
+                "pilot_points": [[BASE_LAT + 0.001, BASE_LON + 0.001]]
             }
-            drone_list.append(drone_data)
-        
-        await sio.emit('droneStatus', drone_list)
-        
-        # 可选：打印状态心跳
-        # print(f"[SIM] Dist: {current_distance:.0f}m | {status_text}")
+            drone_data.append(drone_info)
 
-        await asyncio.sleep(1)
+        # 4. 构建图传/频谱数据 (imageStatus)
+        # 模拟一个常驻的 FPV 信号
+        image_data = []
+        image_info = {
+            "id": "5800_fpv",
+            "freq": 5800.0,
+            "amplitude": random.uniform(80, 100), # 信号强度跳变
+            "type": 1, # 1=FPV
+            "mes": int(time.time() * 1000),
+            "first": 0
+        }
+        image_data.append(image_info)
+
+        # 5. 推送所有协议
+        # A. 无人机列表
+        await sio.emit('droneStatus', drone_data)
+        
+        # B. 图传列表
+        await sio.emit('imageStatus', image_data)
+        
+        # C. 告警数量 (无人机数 + 图传数)
+        count = len(drone_data) + len(image_data)
+        await sio.emit('detect_batch', [count])
+        
+        # D. 设备自身定位 (每5秒发一次即可，这里简化为每次都发)
+        await sio.emit('info', {'lat': BASE_LAT, 'lng': BASE_LON})
+
+        await asyncio.sleep(1) # 1秒刷新一次
 
 # ==========================================
-# 6. 程序入口
+# 5. 启动入口
 # ==========================================
 async def start_background_tasks(app):
-    # 启动 UDP 监听 (端口 9099)
-    app['udp_listener'] = asyncio.create_task(start_udp_server())
-    # 启动 TCP 监听 (端口 2000)
-    server = await asyncio.start_server(handle_relay_client, '0.0.0.0', 2000)
-    app['relay_server'] = server
-    print("[RELAY] TCP Listener Ready on port 2000")
-    # 启动物理引擎
-    app['simulation'] = asyncio.create_task(drone_simulation_loop())
-
-async def start_udp_server():
+    # UDP 监听 9099 (诱骗)
     loop = asyncio.get_running_loop()
-    transport, protocol = await loop.create_datagram_endpoint(
-        lambda: UdpProtocol(),
-        local_addr=('127.0.0.1', 9099)
-    )
-    print("[UDP] Listener Ready on port 9099")
-    return transport
+    await loop.create_datagram_endpoint(lambda: UdpProtocol(), local_addr=('0.0.0.0', 9099))
+    print("[UDP] Listening on 9099")
+    
+    # 物理引擎
+    asyncio.create_task(simulation_loop())
 
 if __name__ == '__main__':
-    # 注册后台任务
     app.on_startup.append(start_background_tasks)
-    # 启动 HTTP/SocketIO 服务器 (端口 8090)
-    web.run_app(app, port=8090)
+    # 注意：模拟真实环境端口 3000 (虽然你之前是8090，但C++里我们要对齐真实环境)
+    web.run_app(app, port=3000)

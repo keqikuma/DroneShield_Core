@@ -58,6 +58,7 @@ qt_add_executable(DroneShield_Core
     src/UI/jammerconfdialog.h src/UI/jammerconfdialog.cpp
     src/UI/relaydialog.h src/UI/relaydialog.cpp
     src/UI/toggleswitch.h src/UI/toggleswitch.cpp
+    src/Backend/DataStructs.h
 )
 
 target_link_libraries(DroneShield_Core

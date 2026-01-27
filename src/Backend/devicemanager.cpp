@@ -25,21 +25,33 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
 
     // 3. 侦测 (SocketIO)
     m_detectionDriver = new DetectionDriver(this);
-    connect(m_detectionDriver, &DetectionDriver::droneDetected,
-            this, &DeviceManager::onRealTimeDroneDetected);
-    connect(m_detectionDriver, &DetectionDriver::imageDetected,
-            this, &DeviceManager::onRealTimeImageDetected);
-    m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, Config::LINUX_PORT);
+
+    // 连接侦测信号 (对接 DataStructs.h 中的结构)
+    connect(m_detectionDriver, &DetectionDriver::sigDroneListUpdated,
+            this, &DeviceManager::onDroneListUpdated);
+
+    connect(m_detectionDriver, &DetectionDriver::sigImageListUpdated,
+            this, &DeviceManager::onImageListUpdated);
+
+    connect(m_detectionDriver, &DetectionDriver::sigAlertCountUpdated,
+            this, &DeviceManager::onAlertCountUpdated);
+
+    connect(m_detectionDriver, &DetectionDriver::sigDevicePositionUpdated,
+            this, &DeviceManager::onDevicePositionUpdated);
+
+    // 注意：Node.js 后端通常运行在 3000 端口，如果配置不同请修改此处
+    m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, 3000);
 
     // 4. 压制 (Relay TCP)
     m_relayDriver = new RelayDriver(this);
     m_relayDriver->connectToDevice(Config::RELAY_IP, Config::RELAY_PORT);
 
-    // 5. 看门狗
+    // 5. 看门狗 (保持连接)
     m_monitorTimer = new QTimer(this);
     m_monitorTimer->setInterval(5000);
     connect(m_monitorTimer, &QTimer::timeout, this, [this](){
-        m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, Config::LINUX_PORT);
+        // SocketIO 库通常自带重连机制，此处可根据需要保留或移除
+        // m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, 3000);
     });
     m_monitorTimer->start();
 
@@ -54,7 +66,57 @@ void DeviceManager::log(const QString &msg) {
 }
 
 // ============================================================================
-// 2. 模式切换与总控
+// 2. 侦测数据处理与转发 (新增部分)
+// ============================================================================
+
+void DeviceManager::onDroneListUpdated(const QList<DroneInfo> &drones)
+{
+    // 1. 转发全量数据给 UI 显示
+    emit sigDroneList(drones);
+
+    // 2. 兼容旧 UI 的信号 (如果还有旧代码依赖它)
+    emit sigTargetsUpdated(drones);
+
+    // 3. 为自动防御逻辑提取关键信息
+    bool hasThreat = false;
+    double minDistance = 999999.0;
+
+    if (!drones.isEmpty()) {
+        for (const auto &d : drones) {
+            // 过滤白名单 (白名单无人机不触发防御)
+            if (d.whiteList) continue;
+
+            hasThreat = true;
+            if (d.distance < minDistance) {
+                minDistance = d.distance;
+            }
+        }
+    }
+
+    // 执行自动决策
+    processDecision(hasThreat, minDistance);
+}
+
+void DeviceManager::onImageListUpdated(const QList<ImageInfo> &images)
+{
+    // 转发图传/频谱数据给 UI
+    emit sigImageList(images);
+}
+
+void DeviceManager::onAlertCountUpdated(int count)
+{
+    // 转发告警数量给 UI (右上角红点)
+    emit sigAlertCount(count);
+}
+
+void DeviceManager::onDevicePositionUpdated(double lat, double lng)
+{
+    // 转发设备自身位置给 UI (雷达中心点)
+    emit sigSelfPosition(lat, lng);
+}
+
+// ============================================================================
+// 3. 模式切换与总控
 // ============================================================================
 
 void DeviceManager::setSystemMode(SystemMode mode)
@@ -89,27 +151,8 @@ void DeviceManager::stopAllBusiness()
 }
 
 // ============================================================================
-// 3. 自动模式 (核心业务逻辑)
+// 4. 自动模式决策 (核心业务逻辑)
 // ============================================================================
-
-void DeviceManager::onRealTimeDroneDetected(const QList<DroneInfo> &drones)
-{
-    emit sigTargetsUpdated(drones); // 刷新UI
-
-    bool hasDrone = !drones.isEmpty();
-    double minDistance = 999999.0;
-    if (hasDrone) {
-        for (const auto &d : drones) {
-            if (d.distance < minDistance) minDistance = d.distance;
-        }
-    }
-
-    processDecision(hasDrone, minDistance);
-}
-
-void DeviceManager::onRealTimeImageDetected(int count, const QString &desc) {
-    // 图传检测暂不触发动作
-}
 
 void DeviceManager::processDecision(bool hasDrone, double distance)
 {
@@ -164,7 +207,7 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
 }
 
 // ============================================================================
-// 4. 手动模式业务
+// 5. 手动模式业务
 // ============================================================================
 
 // --- 诱骗 ---

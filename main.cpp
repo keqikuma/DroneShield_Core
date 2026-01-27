@@ -17,12 +17,29 @@ int main(int argc, char *argv[])
     DeviceManager *systemCore = new DeviceManager(&w);
 
     // =======================================================
-    // 1. 下行信号：后端 -> UI (更新显示)
+    // 1. 下行信号：后端 -> UI (数据展示)
     // =======================================================
+
+    // 日志
     QObject::connect(systemCore, &DeviceManager::sigLogMessage,
                      &w, &MainWindow::slotUpdateLog);
-    QObject::connect(systemCore, &DeviceManager::sigTargetsUpdated,
-                     &w, &MainWindow::slotUpdateTargets);
+
+    // 【修复】无人机列表 (旧代码是 slotUpdateTargets，已删除，改为 slotUpdateDroneList)
+    QObject::connect(systemCore, &DeviceManager::sigDroneList,
+                     &w, &MainWindow::slotUpdateDroneList);
+
+    // 【新增】图传/频谱列表
+    QObject::connect(systemCore, &DeviceManager::sigImageList,
+                     &w, &MainWindow::slotUpdateImageList);
+
+    // 【新增】告警数量 (右上角红点)
+    QObject::connect(systemCore, &DeviceManager::sigAlertCount,
+                     &w, &MainWindow::slotUpdateAlertCount);
+
+    // 【新增】设备自身定位 (给雷达用)
+    QObject::connect(systemCore, &DeviceManager::sigSelfPosition,
+                     &w, &MainWindow::slotUpdateDevicePos);
+
 
     // =======================================================
     // 2. 上行信号：UI -> 后端 (控制指令)
@@ -46,11 +63,10 @@ int main(int argc, char *argv[])
                      systemCore, &DeviceManager::setRelayAll);
 
     // 2.4 手动诱骗 (总开关 - 主要用于停止)
-    // 当 UI 发出 false 时，调用 setManualSpoofSwitch(false) 关闭射频
     QObject::connect(&w, &MainWindow::sigManualSpoof,
                      systemCore, &DeviceManager::setManualSpoofSwitch);
 
-    // 2.5 【核心新增】手动诱骗模式具体指令
+    // 2.5 手动诱骗模式具体指令
     // 圆周驱离
     QObject::connect(&w, &MainWindow::sigManualSpoofCircle,
                      systemCore, &DeviceManager::setManualCircular);
@@ -78,7 +94,7 @@ int main(int argc, char *argv[])
     // =======================================================
 
     w.slotUpdateLog("系统核心已加载，正在连接侦测节点...");
-    w.slotUpdateLog("等待 Python 脚本数据流...");
+    w.slotUpdateLog("等待 SocketIO 数据流...");
 
     return a.exec();
 }

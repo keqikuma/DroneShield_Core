@@ -3,95 +3,123 @@
 #include <QJsonObject>
 #include <QDebug>
 #include <utility>
-#include "../Consts.h" // 引入常量
-#include <QtMath>      // 引入数学库
 
 DetectionDriver::DetectionDriver(QObject *parent) : QObject(parent)
 {
     m_socketClient = new SocketIoClient(this);
 
-    // 绑定 SocketIO 事件
+    // 绑定 SocketIO 事件，分发给不同的解析函数
     connect(m_socketClient, &SocketIoClient::eventReceived, this,
             [this](const QString &name, const QJsonValue &data){
 
                 if (name == "droneStatus") {
                     handleDroneStatus(data);
-                } else if (name == "imageStatus") {
+                }
+                else if (name == "imageStatus") {
                     handleImageStatus(data);
+                }
+                else if (name == "detect_batch") {
+                    handleDetectBatch(data);
+                }
+                else if (name == "info") {
+                    handleInfo(data);
                 }
             });
 }
 
 void DetectionDriver::connectToDevice(const QString &ip, int port)
 {
+    // Node.js 后端默认端口可能是 3000 (根据 server.js process.env.PORT || 3000)
+    // 请确保 config 中传入正确的端口
     QString url = QString("ws://%1:%2").arg(ip).arg(port);
     m_socketClient->connectToServer(url);
 }
 
+// 1. 解析无人机列表 (droneStatus)
 void DetectionDriver::handleDroneStatus(const QJsonValue &data)
 {
     QList<DroneInfo> droneList;
     if (data.isArray()) {
         const QJsonArray arr = data.toArray();
         for (const auto &val : std::as_const(arr)) {
-            QJsonObject obj = val.toObject();
-            QJsonObject info = obj["uav_info"].toObject();
-            if (info.isEmpty()) info = obj["trace"].toObject();
+            QJsonObject rootObj = val.toObject();
+
+            // 数据在 uav_info 字段中，有时也会混有 uav_points, pilot_points
+            QJsonObject info = rootObj["uav_info"].toObject();
+
+            // 容错：如果没有 uav_info，尝试直接读 trace (模拟数据中有时结构不同)
+            if (info.isEmpty() && rootObj.contains("trace")) {
+                info = rootObj["trace"].toObject();
+            }
+            if (info.isEmpty()) continue;
 
             DroneInfo d;
-            d.id = info["uav_id"].toString();
-            d.model = info["model_name"].toString();
-            d.lat = info["uav_lat"].toDouble();
-            d.lon = info["uav_lng"].toDouble();
-            d.freq = info["freq"].toDouble();
-
-            // === 【核心修改】计算真实距离和方位 ===
-            // 使用 Consts.h 里定义的基地坐标作为参考点
-            d.distance = calculateDistance(Config::BASE_LAT, Config::BASE_LON, d.lat, d.lon);
-            d.azimuth  = calculateAzimuth(Config::BASE_LAT, Config::BASE_LON, d.lat, d.lon);
-            // ===================================
+            d.uav_id        = info["uav_id"].toString();
+            d.model_name    = info["model_name"].toString();
+            d.distance      = info["distance"].toDouble();
+            d.azimuth       = info["azimuth"].toDouble(); // 后端已计算好方位角
+            d.uav_lat       = info["uav_lat"].toDouble();
+            d.uav_lng       = info["uav_lng"].toDouble();
+            d.height        = info["height"].toDouble();
+            d.freq          = info["freq"].toDouble();    // 后端已除以10
+            d.velocity      = info["velocity"].toString();
+            d.pilot_lat     = info["pilot_lat"].toDouble();
+            d.pilot_lng     = info["pilot_lng"].toDouble();
+            d.pilot_distance= info["pilot_distance"].toDouble();
+            d.whiteList     = info["whiteList"].toBool();
+            d.uuid          = info["uuid"].toString();
+            d.img           = info["img"].toInt();
+            d.type          = info["type"].toString();
 
             droneList.append(d);
         }
     }
-    emit droneDetected(droneList);
+    emit sigDroneListUpdated(droneList);
 }
 
+// 2. 解析图传列表 (imageStatus)
 void DetectionDriver::handleImageStatus(const QJsonValue &data)
+{
+    QList<ImageInfo> imageList;
+    if (data.isArray()) {
+        const QJsonArray arr = data.toArray();
+        for (const auto &val : std::as_const(arr)) {
+            QJsonObject obj = val.toObject();
+
+            ImageInfo img;
+            img.id        = obj["id"].toString();
+            img.freq      = obj["freq"].toDouble();
+            img.amplitude = obj["amplitude"].toDouble();
+            img.type      = obj["type"].toInt();
+            // mes 是时间戳，可能是大整数
+            img.mes       = obj["mes"].toVariant().toLongLong();
+            img.first     = obj["first"].toInt();
+
+            imageList.append(img);
+        }
+    }
+    emit sigImageListUpdated(imageList);
+}
+
+// 3. 解析告警数量 (detect_batch) -> [数量]
+void DetectionDriver::handleDetectBatch(const QJsonValue &data)
 {
     if (data.isArray()) {
         QJsonArray arr = data.toArray();
-        int count = arr.size();
-        QString desc = QString("发现 %1 个图传信号").arg(count);
-        emit imageDetected(count, desc);
+        if (!arr.isEmpty()) {
+            int count = arr[0].toInt();
+            emit sigAlertCountUpdated(count);
+        }
     }
 }
 
-// === 数学算法 ===
-
-// 1. Haversine 公式计算距离 (米)
-double DetectionDriver::calculateDistance(double lat1, double lon1, double lat2, double lon2)
+// 4. 解析自身定位 (info) -> { lat: ..., lng: ... }
+void DetectionDriver::handleInfo(const QJsonValue &data)
 {
-    double dLat = (lat2 - lat1) * Config::DEG_TO_RAD;
-    double dLon = (lon2 - lon1) * Config::DEG_TO_RAD;
-
-    double a = sin(dLat / 2) * sin(dLat / 2) +
-               cos(lat1 * Config::DEG_TO_RAD) * cos(lat2 * Config::DEG_TO_RAD) *
-                   sin(dLon / 2) * sin(dLon / 2);
-
-    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    return Config::EARTH_RADIUS * c;
-}
-
-// 2. 计算方位角 (0-360度, 正北为0)
-double DetectionDriver::calculateAzimuth(double lat1, double lon1, double lat2, double lon2)
-{
-    double dLon = (lon2 - lon1) * Config::DEG_TO_RAD;
-    double y = sin(dLon) * cos(lat2 * Config::DEG_TO_RAD);
-    double x = cos(lat1 * Config::DEG_TO_RAD) * sin(lat2 * Config::DEG_TO_RAD) -
-               sin(lat1 * Config::DEG_TO_RAD) * cos(lat2 * Config::DEG_TO_RAD) * cos(dLon);
-
-    double brng = atan2(y, x);
-    brng = qRadiansToDegrees(brng); // 转为角度
-    return fmod(brng + 360.0, 360.0); // 归一化到 0-360
+    if (data.isObject()) {
+        QJsonObject obj = data.toObject();
+        double lat = obj["lat"].toDouble();
+        double lng = obj["lng"].toDouble();
+        emit sigDevicePositionUpdated(lat, lng);
+    }
 }

@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QTimer>
 
+#include "DataStructs.h" // 引入新结构体
 #include "Drivers/spoofdriver.h"
 #include "Drivers/detectiondriver.h"
 #include "Drivers/jammerdriver.h"
@@ -23,56 +24,56 @@ public:
     explicit DeviceManager(QObject *parent = nullptr);
     ~DeviceManager();
 
-    // ==========================================
-    // 模式切换
-    // ==========================================
+    // ... (手动/自动模式切换函数保持不变，此处省略以节省篇幅) ...
     void setSystemMode(SystemMode mode);
     void stopAllBusiness();
 
-    // ==========================================
-    // 手动模式业务
-    // ==========================================
-
-    // 1. 诱骗控制
-    void setManualSpoofSwitch(bool enable); // 手动总开关
-    void setManualCircular();               // 手动圆周
-    void setManualDirection(SpoofDirection dir); // 手动定向 (东/南/西/北)
-
-    // 2. 干扰控制 (Linux)
+    // 手动控制函数
+    void setManualSpoofSwitch(bool enable);
+    void setManualCircular();
+    void setManualDirection(SpoofDirection dir);
     void setJammerConfig(const QList<JammerConfigData> &configs);
     void setManualJammer(bool enable);
-
-    // 3. 压制控制 (Relay)
     void setRelayChannel(int channel, bool on);
     void setRelayAll(bool on);
 
 private slots:
-    // 侦测信号槽
-    void onRealTimeDroneDetected(const QList<DroneInfo> &drones);
-    void onRealTimeImageDetected(int count, const QString &desc);
+    // --- 接收驱动层信号的槽 ---
+    void onDroneListUpdated(const QList<DroneInfo> &drones);
+    void onImageListUpdated(const QList<ImageInfo> &images);
+    void onAlertCountUpdated(int count);
+    void onDevicePositionUpdated(double lat, double lng);
 
 private:
-    // 核心自动决策
-    void processDecision(bool hasDrone, double distance);
+    void processDecision(bool hasDrone, double minDistance);
     void log(const QString &msg);
 
-    // 驱动
     SpoofDriver *m_spoofDriver;
     DetectionDriver *m_detectionDriver;
     JammerDriver *m_jammerDriver;
     RelayDriver *m_relayDriver;
 
-    // 状态
     SystemMode m_currentMode;
     QTimer *m_monitorTimer;
 
-    // 运行标志位
     bool m_isAutoSpoofingRunning;
     bool m_isLinuxJammerRunning;
     bool m_isRelaySuppressionRunning;
 
 signals:
+    // --- 发送给 UI 的信号 ---
     void sigLogMessage(const QString &msg);
+
+    // 全量无人机数据
+    void sigDroneList(const QList<DroneInfo> &drones);
+    // 全量图传数据
+    void sigImageList(const QList<ImageInfo> &images);
+    // 告警数量
+    void sigAlertCount(int count);
+    // 设备自身位置
+    void sigSelfPosition(double lat, double lng);
+
+    // 兼容旧逻辑的信号
     void sigTargetsUpdated(const QList<DroneInfo> &drones);
 };
 

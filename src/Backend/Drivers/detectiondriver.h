@@ -3,20 +3,7 @@
 
 #include <QObject>
 #include "../HAL/socketioclient.h"
-
-// 定义一个简易结构体传给 UI
-struct DroneInfo {
-    QString id;
-    QString model;
-    double lat;
-    double lon;
-    double freq;
-
-    // 清洗后的真实距离 (米)
-    double distance;
-    // 清洗后的真实方位 (度)
-    double azimuth;
-};
+#include "../DataStructs.h" // 引入统一数据结构
 
 class DetectionDriver : public QObject
 {
@@ -26,20 +13,23 @@ public:
     void connectToDevice(const QString &ip, int port);
 
 signals:
-    // 发现无人机 (数传)
-    void droneDetected(const QList<DroneInfo> &drones);
-    // 发现图传信号
-    void imageDetected(int count, const QString &desc);
+    // 1. 无人机列表更新
+    void sigDroneListUpdated(const QList<DroneInfo> &drones);
+    // 2. 图传/频谱列表更新
+    void sigImageListUpdated(const QList<ImageInfo> &images);
+    // 3. 告警数量更新 (detect_batch)
+    void sigAlertCountUpdated(int count);
+    // 4. 设备自身定位更新 (info)
+    void sigDevicePositionUpdated(double lat, double lng);
 
 private:
     SocketIoClient *m_socketClient;
+
+    // 解析处理函数
     void handleDroneStatus(const QJsonValue &data);
     void handleImageStatus(const QJsonValue &data);
-
-    // 辅助函数：计算两点间距离 (Haversine公式)
-    double calculateDistance(double lat1, double lon1, double lat2, double lon2);
-    // 辅助函数：计算方位角
-    double calculateAzimuth(double lat1, double lon1, double lat2, double lon2);
+    void handleDetectBatch(const QJsonValue &data);
+    void handleInfo(const QJsonValue &data);
 };
 
 #endif // DETECTIONDRIVER_H
