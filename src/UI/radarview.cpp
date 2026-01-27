@@ -51,10 +51,10 @@ void RadarView::initCacheDirectory()
     // --- Windows 策略 ---
     // 方案A (推荐): 存放在 AppData/Local/DroneShield/Cache
     // 路径示例: C:/Users/Admin/AppData/Local/DroneShield/tiles_cache
-    basePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    // basePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
 
     // 方案B (便携): 存放在 exe 同级目录下 (如果不安装，只是拷贝运行用这个)
-    // basePath = QCoreApplication::applicationDirPath() + "/LocalCache";
+    basePath = QCoreApplication::applicationDirPath() + "/LocalCache";
 #elif defined(Q_OS_MAC)
     // --- Mac 策略 ---
     // 路径示例: /Users/Rustin/Library/Caches/DroneShield/tiles_cache
