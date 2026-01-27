@@ -113,7 +113,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->gridLayout_Main->setColumnStretch(2, 1);
     ui->gridLayout_Main->setRowStretch(0, 4);
     ui->gridLayout_Main->setRowStretch(1, 1);
-    ui->groupBox_Radar->setMaximumHeight(450);
+    // ui->groupBox_Radar->setMaximumHeight(450);
 
     // 2. 初始化雷达控件
     m_radar = new RadarView(this);
