@@ -8,7 +8,8 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <QCheckBox> // 【必须引入】
+#include <QCheckBox>
+#include <QStackedWidget>
 
 // 引入统一数据结构
 #include "src/Backend/DataStructs.h"
@@ -57,16 +58,21 @@ signals:
 private:
     Ui::MainWindow *ui;
     RadarView *m_radar;
-    ToggleSwitch *m_autoSwitch; // 自动模式保留开关样式
+    ToggleSwitch *m_autoSwitch;
 
     // === 左侧侦测面板控件 ===
     QLabel *m_lblAlertCount;
+
+    QStackedWidget *m_leftStack;
+    QPushButton *m_btnSwitchDrone;
+    QPushButton *m_btnSwitchImage;
+
     QWidget *m_droneListContainer;
     QVBoxLayout *m_droneListLayout;
     QWidget *m_imageListContainer;
     QVBoxLayout *m_imageListLayout;
 
-    // === 【关键修改】右侧诱骗控制控件 (改为 QCheckBox) ===
+    // === 右侧诱骗控制控件 (改为 QCheckBox) ===
     // 之前报错是因为头文件里还是 ToggleSwitch *m_ts...
     QCheckBox *m_chkCircle;
     QCheckBox *m_chkNorth;

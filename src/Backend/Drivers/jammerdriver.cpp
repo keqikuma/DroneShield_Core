@@ -13,7 +13,7 @@ void JammerDriver::setTarget(const QString &ip, int port)
     m_baseUrl = QString("http://%1:%2").arg(ip).arg(port);
 }
 
-// 【核心修改】根据传入的列表构造 JSON
+// 根据传入的列表构造 JSON
 void JammerDriver::setWriteFreq(const QList<JammerConfigData> &configs)
 {
     if (configs.isEmpty()) return;

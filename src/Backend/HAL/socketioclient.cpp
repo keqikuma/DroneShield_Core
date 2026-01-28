@@ -6,28 +6,68 @@
 SocketIoClient::SocketIoClient(QObject *parent) : QObject(parent)
 {
     m_webSocket = new QWebSocket();
-    connect(m_webSocket, &QWebSocket::connected, this, &SocketIoClient::connected);
-    connect(m_webSocket, &QWebSocket::disconnected, this, &SocketIoClient::disconnected);
-    connect(m_webSocket, &QWebSocket::textMessageReceived, this, &SocketIoClient::onTextMessageReceived);
+    m_isManualClose = false;
 
-    connect(m_webSocket, &QWebSocket::errorOccurred, this, [](QAbstractSocket::SocketError error){
-        qDebug() << "[SocketIO Error]" << error;
+    // 初始化重连定时器
+    m_reconnectTimer = new QTimer(this);
+    m_reconnectTimer->setInterval(3000);
+    connect(m_reconnectTimer, &QTimer::timeout, this, &SocketIoClient::onReconnectTimerOut);
+
+    // 连接成功
+    connect(m_webSocket, &QWebSocket::connected, this, [this](){
+        m_reconnectTimer->stop();
+        qDebug() << "[SocketIO] 物理连接建立";
     });
+
+    // 连接断开 -> 启动重连
+    connect(m_webSocket, &QWebSocket::disconnected, this, [this](){
+        emit disconnected();
+        if (!m_isManualClose) {
+            qDebug() << "[SocketIO] 连接断开，3秒后尝试重连...";
+            m_reconnectTimer->start();
+        }
+    });
+
+    // 发生错误 -> 启动重连
+    connect(m_webSocket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError error){
+        qDebug() << "[SocketIO Error]" << error;
+        // 如果当前没连上，且定时器没跑，就启动它
+        if (m_webSocket->state() != QAbstractSocket::ConnectedState && !m_isManualClose) {
+            if (!m_reconnectTimer->isActive()) {
+                m_reconnectTimer->start();
+            }
+        }
+    });
+
+    connect(m_webSocket, &QWebSocket::textMessageReceived, this, &SocketIoClient::onTextMessageReceived);
 }
 
 void SocketIoClient::connectToServer(const QString &url)
 {
-    if (m_webSocket->state() == QAbstractSocket::ConnectedState) {
+    m_targetUrl = url;
+
+    if (!m_targetUrl.endsWith("/")) m_targetUrl += "/";
+    if (!m_targetUrl.contains("socket.io")) m_targetUrl += "socket.io/?EIO=4&transport=websocket";
+
+    m_isManualClose = false;
+    doConnect();
+}
+
+void SocketIoClient::doConnect()
+{
+    // 如果已经连接或正在连接，就不操作
+    if (m_webSocket->state() == QAbstractSocket::ConnectedState ||
+        m_webSocket->state() == QAbstractSocket::ConnectingState) {
         return;
     }
 
-    // Socket.IO 通常连接路径是 /socket.io/?EIO=4&transport=websocket
-    QString fullUrl = url;
-    if (!fullUrl.endsWith("/")) fullUrl += "/";
-    fullUrl += "socket.io/?EIO=4&transport=websocket";
+    qDebug() << "[SocketIO] 尝试连接..." << m_targetUrl;
+    m_webSocket->open(QUrl(m_targetUrl));
+}
 
-    qDebug() << "[SocketIO] 连接中..." << fullUrl;
-    m_webSocket->open(QUrl(fullUrl));
+void SocketIoClient::onReconnectTimerOut()
+{
+    doConnect();
 }
 
 void SocketIoClient::onTextMessageReceived(const QString &message)

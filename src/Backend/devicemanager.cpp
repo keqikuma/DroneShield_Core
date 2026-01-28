@@ -46,15 +46,6 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     m_relayDriver = new RelayDriver(this);
     m_relayDriver->connectToDevice(Config::RELAY_IP, Config::RELAY_PORT);
 
-    // 5. 看门狗 (保持连接)
-    m_monitorTimer = new QTimer(this);
-    m_monitorTimer->setInterval(5000);
-    connect(m_monitorTimer, &QTimer::timeout, this, [this](){
-        // SocketIO 库通常自带重连机制，此处可根据需要保留或移除
-        // m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, 3000);
-    });
-    m_monitorTimer->start();
-
     log("[DeviceManager] 就绪");
 }
 

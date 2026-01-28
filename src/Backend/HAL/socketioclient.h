@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QWebSocket>
 #include <QJsonObject>
+#include <QTimer>
 
 class SocketIoClient : public QObject
 {
@@ -20,10 +21,18 @@ signals:
 
 private slots:
     void onTextMessageReceived(const QString &message);
+    void onReconnectTimerOut();
 
 private:
     QWebSocket *m_webSocket;
     void parseSocketIoMessage(const QString &msg);
+
+    // 重连机制变量
+    QTimer *m_reconnectTimer;
+    QString m_targetUrl;      // 保存目标地址
+    bool m_isManualClose;     // 标记是否是用户手动关闭
+
+    void doConnect();         // 内部连接执行函数
 };
 
 #endif // SOCKETIOCLIENT_H

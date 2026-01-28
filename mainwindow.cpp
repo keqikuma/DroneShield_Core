@@ -14,86 +14,112 @@
 #include "src/UI/jammerconfdialog.h"
 #include "src/UI/relaydialog.h"
 
-// ============================================================================
-// 辅助函数：创建卡片内部的一行信息
-// ============================================================================
-QWidget* MainWindow::createInfoRow(const QString &label, const QString &value, bool isHighlight) {
-    QWidget *w = new QWidget(this);
-    QHBoxLayout *l = new QHBoxLayout(w);
-    l->setContentsMargins(0, 2, 0, 2); // 紧凑布局
-    l->setSpacing(10);
 
-    QLabel *lblKey = new QLabel(label, w);
-    lblKey->setStyleSheet("color: #888; font-size: 12px;");
-    lblKey->setFixedWidth(70); // 固定标签宽度，对齐好看
-
-    QLabel *lblVal = new QLabel(value, w);
-    lblVal->setWordWrap(true); // 允许换行
-    if (isHighlight) {
-        lblVal->setStyleSheet("color: #00FF00; font-weight: bold; font-size: 13px;");
-    } else {
-        lblVal->setStyleSheet("color: #DDD; font-size: 12px;");
-    }
-
-    l->addWidget(lblKey);
-    l->addWidget(lblVal); // 值占据剩余空间
-    return w;
-}
 
 // ============================================================================
-// 辅助函数：创建无人机信息卡片
+// 无人机卡片
 // ============================================================================
 QWidget* MainWindow::createDroneCard(const DroneInfo &info) {
+    // 1. 创建卡片 Frame
     QFrame *card = new QFrame(this);
-    card->setStyleSheet("background-color: #2D2D2D; border: 1px solid #444; border-radius: 6px; margin-bottom: 6px;");
+    card->setFrameShape(QFrame::Box);
+    card->setFrameShadow(QFrame::Plain);
+
+    // 样式表：背景暗灰 (#2D2D2D)，文字白色，边框浅灰
+    card->setStyleSheet(
+        "QFrame {"
+        "  background-color: #2D2D2D;"   // 暗色背景
+        "  color: #FFFFFF;"              // 白色文字
+        "  border: 1px solid #505050;"   // 边框
+        "  border-radius: 4px;"
+        "}"
+        "QLabel {"
+        "  border: none;"                // 内部标签不需要边框
+        "  background: transparent;"     // 标签背景透明
+        "}"
+        );
+
+    // 2. 垂直布局
     QVBoxLayout *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(10, 10, 10, 10);
-    layout->setSpacing(0);
+    layout->setSpacing(4);           // 行间距
+    layout->setContentsMargins(10, 10, 10, 10); // 内边距
 
-    // 1. 标题栏 (机型 + ID)
-    QLabel *title = new QLabel(QString("%1 (%2)").arg(info.model_name).arg(info.uav_id), card);
-    title->setStyleSheet("color: #FFA500; font-weight: bold; font-size: 14px; border-bottom: 1px solid #555; padding-bottom: 5px; margin-bottom: 5px;");
-    layout->addWidget(title);
+    // 3. 标题 (加粗，稍微大一点)
+    QLabel *lblTitle = new QLabel(QString("机型: %1").arg(info.model_name), card);
+    QFont titleFont;
+    titleFont.setBold(true);
+    titleFont.setPointSize(14); // 字号大一点
+    lblTitle->setFont(titleFont);
+    // 标题可以用个醒目的颜色 (比如橙色) 或者保持白色，这里用浅黄色区分一下
+    lblTitle->setStyleSheet("color: #FFD700;");
+    layout->addWidget(lblTitle);
 
-    // 2. 详细内容 (根据需求 JSON 字段显示)
-    layout->addWidget(createInfoRow("距离:", QString::number(info.distance, 'f', 1) + " m", true));
-    layout->addWidget(createInfoRow("方位角:", QString::number(info.azimuth, 'f', 1) + "°"));
-    layout->addWidget(createInfoRow("频率:", QString::number(info.freq, 'f', 1) + " MHz"));
-    layout->addWidget(createInfoRow("高度:", QString::number(info.height, 'f', 1) + " m"));
-    layout->addWidget(createInfoRow("无人机坐标:", QString::number(info.uav_lat, 'f', 6) + ", " + QString::number(info.uav_lng, 'f', 6)));
-    layout->addWidget(createInfoRow("飞手坐标:", QString::number(info.pilot_lat, 'f', 6) + ", " + QString::number(info.pilot_lng, 'f', 6)));
-    layout->addWidget(createInfoRow("飞手距离:", QString::number(info.pilot_distance, 'f', 1) + " m"));
-    layout->addWidget(createInfoRow("速度:", info.velocity));
-    layout->addWidget(createInfoRow("白名单:", info.whiteList ? "是" : "否"));
-    layout->addWidget(createInfoRow("UUID:", info.uuid));
+    // 4. 详细信息 (一行一个，恢复所有字段)
+    // 使用 lambda 简化重复代码
+    auto addRow = [&](QString label, QString value) {
+        QLabel *lbl = new QLabel(QString("%1: %2").arg(label).arg(value), card);
+        lbl->setStyleSheet("font-size: 12px;"); // 普通文字大小
+        layout->addWidget(lbl);
+    };
+
+    addRow("ID", info.uav_id);
+    addRow("距离", QString::number(info.distance, 'f', 1) + " m");
+    addRow("方位角", QString::number(info.azimuth, 'f', 1) + "°");
+    addRow("频率", QString::number(info.freq, 'f', 1) + " MHz");
+    addRow("高度", QString::number(info.height, 'f', 1) + " m");
+
+    // 坐标保留6位小数
+    addRow("无人机坐标", QString("%1, %2").arg(info.uav_lat, 0, 'f', 6).arg(info.uav_lng, 0, 'f', 6));
+    addRow("飞手坐标", QString("%1, %2").arg(info.pilot_lat, 0, 'f', 6).arg(info.pilot_lng, 0, 'f', 6));
+
+    addRow("飞手距离", QString::number(info.pilot_distance, 'f', 1) + " m");
+    addRow("速度", info.velocity);
+    addRow("UUID", info.uuid);
 
     return card;
 }
 
 // ============================================================================
-// 辅助函数：创建图传/频谱信息卡片
+// 图传卡片
 // ============================================================================
 QWidget* MainWindow::createImageCard(const ImageInfo &info) {
     QFrame *card = new QFrame(this);
-    card->setStyleSheet("background-color: #2D2D2D; border: 1px solid #444; border-radius: 6px; margin-bottom: 6px;");
+    card->setFrameShape(QFrame::Box);
+    card->setFrameShadow(QFrame::Plain);
+
+    // 样式表：暗色背景，白色文字
+    card->setStyleSheet(
+        "QFrame {"
+        "  background-color: #2D2D2D;"
+        "  color: #FFFFFF;"
+        "  border: 1px solid #505050;"
+        "  border-radius: 4px;"
+        "}"
+        "QLabel { border: none; background: transparent; }"
+        );
+
     QVBoxLayout *layout = new QVBoxLayout(card);
+    layout->setSpacing(4);
     layout->setContentsMargins(10, 10, 10, 10);
-    layout->setSpacing(0);
 
     // 标题
-    QString typeStr = (info.type == 1) ? "FPV 图传信号" : "UAV 无人机信号";
-    QLabel *title = new QLabel(typeStr, card);
-    title->setStyleSheet("color: #00BFFF; font-weight: bold; font-size: 14px; border-bottom: 1px solid #555; padding-bottom: 5px; margin-bottom: 5px;");
-    layout->addWidget(title);
+    QString typeStr = (info.type == 1) ? "信号: FPV图传" : "信号: 无人机";
+    QLabel *lblTitle = new QLabel(typeStr, card);
+    QFont titleFont;
+    titleFont.setBold(true);
+    titleFont.setPointSize(14);
+    lblTitle->setFont(titleFont);
+    lblTitle->setStyleSheet("color: #00BFFF;"); // 蓝色标题
+    layout->addWidget(lblTitle);
 
     // 内容
-    layout->addWidget(createInfoRow("ID:", info.id));
-    layout->addWidget(createInfoRow("频率:", QString::number(info.freq, 'f', 1) + " MHz", true));
-    layout->addWidget(createInfoRow("信号强度:", QString::number(info.amplitude, 'f', 1)));
+    layout->addWidget(new QLabel(QString("ID: %1").arg(info.id), card));
+    layout->addWidget(new QLabel(QString("频率: %1 MHz").arg(info.freq, 0, 'f', 1), card));
+    layout->addWidget(new QLabel(QString("强度: %1").arg(info.amplitude, 0, 'f', 1), card));
 
-    // 时间戳转换
+    // 时间
     QDateTime time = QDateTime::fromMSecsSinceEpoch(info.mes);
-    layout->addWidget(createInfoRow("更新时间:", time.toString("HH:mm:ss")));
+    layout->addWidget(new QLabel(QString("时间: %1").arg(time.toString("HH:mm:ss")), card));
 
     return card;
 }
@@ -117,9 +143,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->gridLayout_Main->setRowStretch(0, 4); // 主界面高度
     ui->gridLayout_Main->setRowStretch(1, 1); // 日志高度
 
-    // 解除雷达高度限制，让它自适应填充
-    // ui->groupBox_Radar->setMaximumHeight(450);
-
     // =============================================
     // 2. 初始化雷达控件 (天地图)
     // =============================================
@@ -128,7 +151,7 @@ MainWindow::MainWindow(QWidget *parent)
     if (ui->widgetRadar) ui->widgetRadar->hide();
 
     // =============================================
-    // 3. 重构左侧布局 (侦测目标 + Tab + 列表)
+    // 3. 重构左侧布局 (朴素风格: 按钮 + Stack)
     // =============================================
 
     // 3.0 清除旧控件
@@ -141,77 +164,71 @@ MainWindow::MainWindow(QWidget *parent)
         delete ui->groupBox_Targets->layout();
     }
 
-    // 3.1 创建左侧主垂直布局
+    // 3.1 左侧主布局
     QVBoxLayout *leftMainLayout = new QVBoxLayout(ui->groupBox_Targets);
-    leftMainLayout->setContentsMargins(5, 10, 5, 5);
+    leftMainLayout->setContentsMargins(5, 5, 5, 5);
     leftMainLayout->setSpacing(5);
 
-    // 3.2 顶部 Header (弹簧 + 文字 + 红点)
-    QHBoxLayout *headerLayout = new QHBoxLayout();
-    headerLayout->addStretch();
+    // --- 3.2 顶部切换按钮组 ---
+    QHBoxLayout *btnLayout = new QHBoxLayout();
 
-    QLabel *lblAlertTip = new QLabel("告警数量:", this);
-    lblAlertTip->setStyleSheet("color: #AAAAAA; font-size: 12px; font-weight: bold; margin-right: 5px;");
-    headerLayout->addWidget(lblAlertTip);
+    m_btnSwitchDrone = new QPushButton("无人机列表", this);
+    m_btnSwitchDrone->setFixedHeight(30); // 稍微设个高度，其他保持默认灰
 
+    m_btnSwitchImage = new QPushButton("图传/频谱", this);
+    m_btnSwitchImage->setFixedHeight(30);
+
+    btnLayout->addWidget(m_btnSwitchDrone);
+    btnLayout->addWidget(m_btnSwitchImage);
+
+    // 告警红点 (放在最右边)
+    btnLayout->addStretch();
     m_lblAlertCount = new QLabel("0", this);
-    m_lblAlertCount->setStyleSheet(
-        "QLabel {"
-        "  background-color: #FF0000;"
-        "  color: white;"
-        "  border-radius: 9px;"
-        "  padding: 0px 6px;"
-        "  font-weight: bold;"
-        "  font-size: 12px;"
-        "  min-height: 18px;"
-        "  min-width: 14px;"
-        "  qproperty-alignment: AlignCenter;"
-        "}"
-        );
+    // 红点还是要稍微醒目一点，不然看不见
+    m_lblAlertCount->setStyleSheet("background-color: red; color: white; border-radius: 8px; padding: 2px 6px; font-weight: bold; font-size: 11px;");
     m_lblAlertCount->hide();
-    headerLayout->addWidget(m_lblAlertCount);
+    btnLayout->addWidget(m_lblAlertCount);
 
-    headerLayout->setContentsMargins(0, 0, 5, 0);
-    leftMainLayout->addLayout(headerLayout);
+    leftMainLayout->addLayout(btnLayout);
 
-    // 3.3 Tab 切换页
-    QTabWidget *tabWidget = new QTabWidget(this);
-    tabWidget->setStyleSheet(
-        "QTabWidget::pane { border: 1px solid #444; top: -1px; background: #1E1E1E; }"
-        "QTabBar::tab { background: #2D2D2D; color: #AAA; padding: 8px 20px; border: 1px solid #444; border-bottom: none; }"
-        "QTabBar::tab:selected { background: #444; color: white; border-bottom: 1px solid #444; }"
-        "QTabBar::tab:!selected { margin-top: 2px; }"
-        );
+    // --- 3.3 内容堆叠区域 (StackedWidget) ---
+    m_leftStack = new QStackedWidget(this);
+    leftMainLayout->addWidget(m_leftStack);
 
-    // --- Tab 1: 无人机列表 ---
+    // [页面 0] 无人机列表
     QScrollArea *scrollDrone = new QScrollArea();
     scrollDrone->setWidgetResizable(true);
-    scrollDrone->setStyleSheet("background: transparent; border: none;");
+    scrollDrone->setStyleSheet("background-color: #1E1E1E; border: none;");
 
     m_droneListContainer = new QWidget();
-    m_droneListContainer->setStyleSheet("background: transparent;");
     m_droneListLayout = new QVBoxLayout(m_droneListContainer);
     m_droneListLayout->setAlignment(Qt::AlignTop);
-    m_droneListLayout->setContentsMargins(0, 0, 0, 0);
-    m_droneListLayout->setSpacing(5);
+    m_droneListLayout->setSpacing(5); // 列表项间距
     scrollDrone->setWidget(m_droneListContainer);
-    tabWidget->addTab(scrollDrone, "无人机列表");
 
-    // --- Tab 2: 图传/频谱 ---
+    m_leftStack->addWidget(scrollDrone);
+
+    // [页面 1] 图传/频谱列表
     QScrollArea *scrollImage = new QScrollArea();
     scrollImage->setWidgetResizable(true);
-    scrollImage->setStyleSheet("background: transparent; border: none;");
+
+    scrollImage->setStyleSheet("background-color: #1E1E1E; border: none;");
 
     m_imageListContainer = new QWidget();
-    m_imageListContainer->setStyleSheet("background: transparent;");
     m_imageListLayout = new QVBoxLayout(m_imageListContainer);
     m_imageListLayout->setAlignment(Qt::AlignTop);
-    m_imageListLayout->setContentsMargins(0, 0, 0, 0);
     m_imageListLayout->setSpacing(5);
     scrollImage->setWidget(m_imageListContainer);
-    tabWidget->addTab(scrollImage, "图传/频谱");
 
-    leftMainLayout->addWidget(tabWidget);
+    m_leftStack->addWidget(scrollImage);
+
+    // --- 3.4 按钮点击切换逻辑 ---
+    connect(m_btnSwitchDrone, &QPushButton::clicked, this, [this](){
+        m_leftStack->setCurrentIndex(0);
+    });
+    connect(m_btnSwitchImage, &QPushButton::clicked, this, [this](){
+        m_leftStack->setCurrentIndex(1);
+    });
 
     // =============================================
     // 4. 重构右侧布局 (统一面板: 诱骗在上，干扰在下)
@@ -221,8 +238,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->btnAutoMode->hide();
     ui->btnSpoof->hide();
     if (ui->line) ui->line->hide();
-
-    // 【关键】隐藏 UI 设计器里的 GroupBox，我们自己创建一个新的
     ui->groupBox_Control->hide();
 
     // B. 创建右侧总容器
@@ -238,13 +253,11 @@ MainWindow::MainWindow(QWidget *parent)
     QHBoxLayout *headerTopLayout = new QHBoxLayout(headerWidget);
     headerTopLayout->setContentsMargins(15, 0, 15, 0);
 
-    // 移动系统状态标签
     ui->verticalLayout_3->removeWidget(ui->label_SystemStatus);
     ui->label_SystemStatus->setParent(headerWidget);
     headerTopLayout->addWidget(ui->label_SystemStatus);
     headerTopLayout->addStretch();
 
-    // 自动模式开关
     QLabel *lblAuto = new QLabel("自动接管模式", this);
     lblAuto->setStyleSheet("font-weight: bold; font-size: 14px; color: #E0E0E0;");
     headerTopLayout->addWidget(lblAuto);
@@ -268,9 +281,7 @@ MainWindow::MainWindow(QWidget *parent)
     ctrlLayout->setContentsMargins(15, 25, 15, 15);
     ctrlLayout->setSpacing(10);
 
-    // =============================================
-    // PART 1: 诱骗模式 (SPOOF)
-    // =============================================
+    // --- PART 1: 诱骗模式 (SPOOF) ---
     QLabel *lblSpoofTitle = new QLabel("诱骗模式 (SPOOF)", this);
     lblSpoofTitle->setStyleSheet("color: #00FF00; font-weight: bold; font-size: 13px; margin-bottom: 5px;");
     lblSpoofTitle->setAlignment(Qt::AlignCenter);
@@ -317,12 +328,8 @@ MainWindow::MainWindow(QWidget *parent)
         );
     ctrlLayout->addWidget(m_btnExecuteSpoof);
 
-    // =============================================
-    // PART 2: 干扰/压制 (JAMMING)
-    // =============================================
-
-    // 增加间距，把两个模块隔开
-    ctrlLayout->addSpacing(25);
+    // --- PART 2: 干扰/压制 (JAMMING) ---
+    ctrlLayout->addSpacing(25); // 间距
 
     // 标题
     QLabel *lblJamTitle = new QLabel("干扰/压制 (JAMMING)", this);
@@ -330,10 +337,10 @@ MainWindow::MainWindow(QWidget *parent)
     lblJamTitle->setAlignment(Qt::AlignCenter);
     ctrlLayout->addWidget(lblJamTitle);
 
-    // 【修改点】线条 2 (现在移到了标题下方，且改为实线)
+    // 线条 2 (干扰标题下方)
     QFrame *line2 = new QFrame(this);
     line2->setFrameShape(QFrame::HLine);
-    line2->setStyleSheet("color: #444;"); // 与上面一致的实线样式
+    line2->setStyleSheet("color: #444;"); // 实线
     ctrlLayout->addWidget(line2);
 
     // 按钮组
@@ -349,10 +356,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->btnJammer->setMinimumHeight(40);
     ctrlLayout->addWidget(ui->btnJammer);
 
-    // 底部弹簧
     ctrlLayout->addStretch();
 
-    // E. 放入主布局
     rightLayout->addWidget(controlGroup);
     ui->gridLayout_Main->addWidget(rightPanel, 0, 2, 2, 1);
 
@@ -453,7 +458,7 @@ void MainWindow::slotUpdateDevicePos(double lat, double lng)
 // 交互逻辑
 // ============================================================================
 
-// 【修改】互斥逻辑：CheckBox 版本
+// 互斥逻辑：CheckBox 版本
 void MainWindow::handleSpoofCheckBoxMutex(QCheckBox* current)
 {
     if (current->isChecked()) {
