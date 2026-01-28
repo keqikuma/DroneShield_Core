@@ -2,6 +2,7 @@
 #define DETECTIONDRIVER_H
 
 #include <QObject>
+#include <QTimer>
 #include "../HAL/socketioclient.h"
 #include "../DataStructs.h" // 引入统一数据结构
 
@@ -22,14 +23,24 @@ signals:
     // 4. 设备自身定位更新 (info)
     void sigDevicePositionUpdated(double lat, double lng);
 
+private slots:
+    // 处理断开连接
+    void onSocketDisconnected();
+    // 数据超时处理
+    void onDataTimeout();
+
 private:
     SocketIoClient *m_socketClient;
+    QTimer *m_dataExpiryTimer;      // 数据超时定时器
 
     // 解析处理函数
     void handleDroneStatus(const QJsonValue &data);
     void handleImageStatus(const QJsonValue &data);
     void handleDetectBatch(const QJsonValue &data);
     void handleInfo(const QJsonValue &data);
+
+    // 清空所有数据的内部函数
+    void clearAllData();
 };
 
 #endif // DETECTIONDRIVER_H

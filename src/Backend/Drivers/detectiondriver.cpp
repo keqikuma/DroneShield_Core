@@ -8,9 +8,17 @@ DetectionDriver::DetectionDriver(QObject *parent) : QObject(parent)
 {
     m_socketClient = new SocketIoClient(this);
 
+    // 初始化数据超时定时器
+    m_dataExpiryTimer = new QTimer(this);
+    m_dataExpiryTimer->setInterval(3000); // 如果 3秒 没收到数据包，认为信号丢失
+    connect(m_dataExpiryTimer, &QTimer::timeout, this, &DetectionDriver::onDataTimeout);
+
     // 绑定 SocketIO 事件，分发给不同的解析函数
     connect(m_socketClient, &SocketIoClient::eventReceived, this,
             [this](const QString &name, const QJsonValue &data){
+                if (name == "droneStatus" || name == "imageStatus") {
+                    m_dataExpiryTimer->start();
+                }
 
                 if (name == "droneStatus") {
                     handleDroneStatus(data);
@@ -25,6 +33,14 @@ DetectionDriver::DetectionDriver(QObject *parent) : QObject(parent)
                     handleInfo(data);
                 }
             });
+
+    // 连接成功 -> 开启看门狗
+    connect(m_socketClient, &SocketIoClient::connected, this, [this](){
+        m_dataExpiryTimer->start();
+    });
+
+    // 连接断开 -> 立即清空数据
+    connect(m_socketClient, &SocketIoClient::disconnected, this, &DetectionDriver::onSocketDisconnected);
 }
 
 void DetectionDriver::connectToDevice(const QString &ip, int port)
@@ -33,6 +49,28 @@ void DetectionDriver::connectToDevice(const QString &ip, int port)
     // 请确保 config 中传入正确的端口
     QString url = QString("ws://%1:%2").arg(ip).arg(port);
     m_socketClient->connectToServer(url);
+}
+
+void DetectionDriver::onSocketDisconnected()
+{
+    qWarning() << "[Detection] 连接断开，清空界面残留数据";
+    clearAllData();
+    m_dataExpiryTimer->stop(); // 断开了就不用计时了
+}
+
+void DetectionDriver::onDataTimeout()
+{
+    // 这种情况通常是：连接没断，但后端卡死了，或者雷达服务挂了
+    qWarning() << "[Detection] 数据流超时 (3s未更新)，清空界面残留数据";
+    clearAllData();
+}
+
+void DetectionDriver::clearAllData()
+{
+    // 发送空列表，Qt 界面收到后会自动清空显示
+    emit sigDroneListUpdated({});
+    emit sigImageListUpdated({});
+    emit sigAlertCountUpdated(0);
 }
 
 // 1. 解析无人机列表 (droneStatus)
