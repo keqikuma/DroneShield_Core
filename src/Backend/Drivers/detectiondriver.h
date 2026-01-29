@@ -2,44 +2,50 @@
 #define DETECTIONDRIVER_H
 
 #include <QObject>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTimer>
-#include "../HAL/socketioclient.h"
-#include "../DataStructs.h" // 引入统一数据结构
+#include "../DataStructs.h"
 
 class DetectionDriver : public QObject
 {
     Q_OBJECT
 public:
     explicit DetectionDriver(QObject *parent = nullptr);
-    void connectToDevice(const QString &ip, int port);
+    ~DetectionDriver();
+
+    // 启动监听 (参数 ip 其实不用，默认监听 Any，port 用 8089)
+    void startServer(int port);
 
 signals:
-    // 1. 无人机列表更新
     void sigDroneListUpdated(const QList<DroneInfo> &drones);
-    // 2. 图传/频谱列表更新
     void sigImageListUpdated(const QList<ImageInfo> &images);
-    // 3. 告警数量更新 (detect_batch)
     void sigAlertCountUpdated(int count);
-    // 4. 设备自身定位更新 (info)
     void sigDevicePositionUpdated(double lat, double lng);
+    void sigLogMessage(const QString &msg); // 用于输出日志
 
 private slots:
-    // 处理断开连接
+    void onNewConnection();
+    void onReadyRead();
     void onSocketDisconnected();
-    // 数据超时处理
-    void onDataTimeout();
+    void onDataTimeout(); // 数据超时看门狗
 
 private:
-    SocketIoClient *m_socketClient;
-    QTimer *m_dataExpiryTimer;      // 数据超时定时器
+    QTcpServer *m_tcpServer;
+    QTcpSocket *m_currentClient; // 当前连接的 Linux 设备
+    QByteArray m_buffer;         // 数据接收缓冲区 (处理粘包)
+    QTimer *m_dataExpiryTimer;   // 超时检测
 
-    // 解析处理函数
-    void handleDroneStatus(const QJsonValue &data);
-    void handleImageStatus(const QJsonValue &data);
-    void handleDetectBatch(const QJsonValue &data);
-    void handleInfo(const QJsonValue &data);
+    // 解析函数
+    void processBuffer();
+    void parseJsonData(const QByteArray &jsonBytes);
 
-    // 清空所有数据的内部函数
+    // 具体业务解析
+    void handleDroneInfo(const QJsonObject &root);
+    void handleImageInfo(const QJsonObject &root);
+    void handleFpvInfo(const QJsonObject &root);
+    void handleDeviceStatus(const QJsonObject &root);
+
     void clearAllData();
 };
 

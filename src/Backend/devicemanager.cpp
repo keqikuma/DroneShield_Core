@@ -5,7 +5,6 @@
 // ============================================================================
 // 1. 初始化
 // ============================================================================
-
 DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
 {
     log("[DeviceManager] 系统核心初始化...");
@@ -23,7 +22,8 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     m_jammerDriver = new JammerDriver(this);
     m_jammerDriver->setTarget(Config::LINUX_MAIN_IP, Config::LINUX_PORT);
 
-    // 3. 侦测 (SocketIO)
+    // 3. 侦测 (TCP Server)
+    // 注意：这里逻辑变了，本机变成了 TCP 服务端
     m_detectionDriver = new DetectionDriver(this);
 
     // 连接侦测信号 (对接 DataStructs.h 中的结构)
@@ -39,8 +39,9 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     connect(m_detectionDriver, &DetectionDriver::sigDevicePositionUpdated,
             this, &DeviceManager::onDevicePositionUpdated);
 
-    // 注意：Node.js 后端通常运行在 3000 端口，如果配置不同请修改此处
-    m_detectionDriver->connectToDevice(Config::LINUX_MAIN_IP, 8090);
+    // 开启本地 TCP 监听，等待 Linux 主动连接推送数据
+    // 端口 8089 是我们通过 Python 脚本验证过的
+    m_detectionDriver->startServer(8089);
 
     // 4. 压制 (Relay TCP)
     m_relayDriver = new RelayDriver(this);
