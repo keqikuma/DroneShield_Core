@@ -24,9 +24,9 @@ public:
     ~DeviceManager();
 
     void setSystemMode(SystemMode mode);
-    void stopAllBusiness(); // 立即停止所有业务
+    void stopAllBusiness();
 
-    // 手动控制函数
+    // 手动控制
     void setManualSpoofSwitch(bool enable);
     void setManualCircular();
     void setManualDirection(SpoofDirection dir);
@@ -36,16 +36,16 @@ public:
     void setRelayAll(bool on);
 
 private slots:
+    // 数据接收槽
     void onDroneListUpdated(const QList<DroneInfo> &drones);
-    void onImageListUpdated(const QList<ImageInfo> &images);
+    void onImageListUpdated(const QList<ImageInfo> &images); // 【新增】图传也能触发
     void onAlertCountUpdated(int count);
     void onDevicePositionUpdated(double lat, double lng);
-
-    // 【新增】防抖定时器超时槽函数
     void onStopDefenseTimeout();
 
 private:
-    void processDecision(bool hasDrone, double minDistance);
+    // 核心决策函数
+    void processDecision(bool hasThreat, double minDistance);
     void log(const QString &msg);
 
     SpoofDriver *m_spoofDriver;
@@ -54,13 +54,14 @@ private:
     RelayDriver *m_relayDriver;
 
     SystemMode m_currentMode;
-
-    // 【新增】防抖定时器
     QTimer *m_stopDefenseTimer;
 
+    // 状态标志位
     bool m_isAutoSpoofingRunning;
-    bool m_isLinuxJammerRunning;
     bool m_isRelaySuppressionRunning;
+
+    // 辅助：记录上一次是否有图传威胁（用于合并判断）
+    bool m_hasImageThreat;
 
 signals:
     void sigLogMessage(const QString &msg);

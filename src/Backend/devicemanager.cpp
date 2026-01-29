@@ -10,21 +10,19 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     log("[DeviceManager] 系统核心初始化...");
     m_currentMode = SystemMode::Manual;
     m_isAutoSpoofingRunning = false;
-    m_isLinuxJammerRunning = false;
     m_isRelaySuppressionRunning = false;
+    m_hasImageThreat = false;
 
-    // =========================================================
-    // 【新增】初始化防抖定时器
-    // =========================================================
+    // 防抖定时器 (3秒)
     m_stopDefenseTimer = new QTimer(this);
-    m_stopDefenseTimer->setInterval(3000); // 延时 3 秒关闭
-    m_stopDefenseTimer->setSingleShot(true); // 只触发一次
+    m_stopDefenseTimer->setInterval(3000);
+    m_stopDefenseTimer->setSingleShot(true);
     connect(m_stopDefenseTimer, &QTimer::timeout, this, &DeviceManager::onStopDefenseTimeout);
 
     ConfigLoader config;
 
     // 1. 诱骗 (UDP)
-    QString spoofTargetIp = "192.168.10.230"; // 你的硬件IP
+    QString spoofTargetIp = "192.168.10.230";
     int spoofTargetPort = 9099;
     m_spoofDriver = new SpoofDriver(spoofTargetIp, spoofTargetPort, this);
     connect(m_spoofDriver, &SpoofDriver::sigSpoofLog, this, &DeviceManager::sigLogMessage);
@@ -45,7 +43,7 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     m_relayDriver = new RelayDriver(this);
     m_relayDriver->connectToDevice(Config::RELAY_IP, Config::RELAY_PORT);
 
-    log("[DeviceManager] 就绪");
+    log("[DeviceManager] 就绪 (诱骗目标: 192.168.10.230)");
 }
 
 DeviceManager::~DeviceManager() {}
@@ -56,42 +54,77 @@ void DeviceManager::log(const QString &msg) {
 }
 
 // ============================================================================
-// 2. 侦测数据处理
+// 2. 侦测数据处理 (全源触发)
 // ============================================================================
+
+// --- A. 无人机协议数据 ---
 void DeviceManager::onDroneListUpdated(const QList<DroneInfo> &drones)
 {
-    // 转发数据
     emit sigDroneList(drones);
     emit sigTargetsUpdated(drones);
 
-    // 处理空列表 (信号丢失)
-    if (drones.isEmpty()) {
-        processDecision(false, 0);
-        return;
-    }
-
-    bool hasThreat = false;
+    bool hasDroneThreat = false;
     double minDistance = 999999.0;
 
-    for (const auto &d : drones) {
-        // 过滤白名单
-        if (d.whiteList) continue;
+    if (!drones.isEmpty()) {
+        for (const auto &d : drones) {
+            // 白名单过滤 (默认false，即所有都是威胁)
+            if (d.whiteList) continue;
 
-        hasThreat = true;
-        if (d.distance < minDistance) {
-            minDistance = d.distance;
+            hasDroneThreat = true;
+
+            // 【关键修改】距离清洗逻辑
+            // 如果坐标是0，或者距离是0，说明没定位，强制设为超远距离
+            // 这样就 只开诱骗，不开压制
+            double realDist = d.distance;
+            if (d.uav_lat == 0.0 && d.uav_lng == 0.0) {
+                realDist = 999999.0;
+            }
+            if (realDist <= 0.1) {
+                realDist = 999999.0;
+            }
+
+            if (realDist < minDistance) {
+                minDistance = realDist;
+            }
         }
     }
 
-    // 执行决策
-    processDecision(hasThreat, minDistance);
+    // 综合判断：是否有无人机威胁 OR 是否有图传威胁
+    // 注意：图传没有距离信息，默认给最大距离 (只诱骗，不压制)
+    bool finalThreat = hasDroneThreat || m_hasImageThreat;
+
+    // 只有当存在无人机协议时，才使用计算出的 minDistance
+    // 如果只有图传威胁，距离就是无穷大
+    double finalDistance = hasDroneThreat ? minDistance : 999999.0;
+
+    processDecision(finalThreat, finalDistance);
 }
 
-// (onImageListUpdated 等其他函数保持不变...)
-void DeviceManager::onImageListUpdated(const QList<ImageInfo> &images) { emit sigImageList(images); }
+// --- B. 图传/频谱数据 (新增触发源) ---
+void DeviceManager::onImageListUpdated(const QList<ImageInfo> &images)
+{
+    emit sigImageList(images);
+
+    // 只要列表不为空，就认为有威胁 (图传/FPV都算)
+    m_hasImageThreat = !images.isEmpty();
+
+    // 如果当前没有无人机协议数据（DroneList可能为空），这里也必须触发决策
+    // 距离设为无穷大 -> 触发诱骗，但不触发压制
+    if (m_hasImageThreat) {
+        processDecision(true, 999999.0);
+    }
+    else {
+        // 图传没了，但也得调用一下决策，万一无人机协议也没了，好让系统停机
+        // 这里传入 false，让 processDecision 去检查是否真的要停
+        // 注意：这里没法获取无人机协议的状态，所以这只是个辅助触发
+        // 真正的停机主要靠 DroneList 那个空的包来触发，或者防抖超时
+        // 简单起见，我们主要靠 DroneList 驱动，这里只负责“有威胁”时的即时触发
+    }
+}
+
 void DeviceManager::onAlertCountUpdated(int count) { emit sigAlertCount(count); }
 void DeviceManager::onDevicePositionUpdated(double lat, double lng) { emit sigSelfPosition(lat, lng); }
-
 
 // ============================================================================
 // 3. 模式切换与总控
@@ -101,7 +134,6 @@ void DeviceManager::setSystemMode(SystemMode mode)
 {
     if (m_currentMode == mode) return;
 
-    // 如果切回手动，务必取消所有自动定时器
     if (mode == SystemMode::Manual) {
         m_stopDefenseTimer->stop();
     }
@@ -113,87 +145,85 @@ void DeviceManager::setSystemMode(SystemMode mode)
 
 void DeviceManager::stopAllBusiness()
 {
-    // 【新增】停止业务时，也顺便把倒计时停了，防止它稍后误触发
     m_stopDefenseTimer->stop();
 
-    // 1. 关诱骗
     if (m_spoofDriver) m_spoofDriver->setSwitch(false);
     m_isAutoSpoofingRunning = false;
 
-    // 2. 关干扰
     if (m_jammerDriver) m_jammerDriver->setJamming(false);
-    m_isLinuxJammerRunning = false;
 
-    // 3. 关压制
     if (m_relayDriver) m_relayDriver->setAll(false);
     m_isRelaySuppressionRunning = false;
+
+    // 重置威胁状态
+    m_hasImageThreat = false;
 
     log(">>> 所有设备复位 (OFF)");
 }
 
-// 【新增】防抖超时处理：真正停火的地方
 void DeviceManager::onStopDefenseTimeout()
 {
     if (m_currentMode != SystemMode::Auto) return;
-
     log("[自动决策] 信号丢失超过3秒 -> 停止防御");
     stopAllBusiness();
 }
 
 // ============================================================================
-// 4. 自动模式决策 (含防抖逻辑)
+// 4. 自动模式决策 (严格按你要求的顺序)
 // ============================================================================
 
-void DeviceManager::processDecision(bool hasDrone, double distance)
+void DeviceManager::processDecision(bool hasThreat, double distance)
 {
     if (m_currentMode != SystemMode::Auto) return;
 
-    // ---------------------------------------------------
-    // A. 目标消失 -> 启动防抖倒计时
-    // ---------------------------------------------------
-    if (!hasDrone) {
-        // 只有当防御正在运行，且还没开始倒计时的时候，才启动倒计时
+    // ----------------------------------------------------------------
+    // 场景 1: 目标消失 (或信号丢失)
+    // ----------------------------------------------------------------
+    if (!hasThreat) {
+        // 正在运行 && 没在倒计时 -> 启动倒计时
         if ((m_isAutoSpoofingRunning || m_isRelaySuppressionRunning) && !m_stopDefenseTimer->isActive()) {
             log("[自动决策] 目标消失 -> 启动3秒防抖延时...");
-            m_stopDefenseTimer->start(); // 3秒后触发 onStopDefenseTimeout
+            m_stopDefenseTimer->start();
         }
-        return; // 直接返回，暂不停火
+        return;
     }
 
-    // ---------------------------------------------------
-    // A+. 目标重现 -> 取消防抖
-    // ---------------------------------------------------
+    // ----------------------------------------------------------------
+    // 场景 2: 目标存在 (重置倒计时)
+    // ----------------------------------------------------------------
     if (m_stopDefenseTimer->isActive()) {
-        log("[自动决策] 目标重现 -> 保持防御 (取消停止)");
-        m_stopDefenseTimer->stop(); // 只要有数据，就掐断倒计时
+        m_stopDefenseTimer->stop(); // 续命
     }
 
-    // ---------------------------------------------------
-    // B. 发现目标 -> 启动基础防御 (诱骗: 圆周)
-    // ---------------------------------------------------
+    // ----------------------------------------------------------------
+    // 场景 3: 触发诱骗 (第一优先级)
+    // 只要有威胁，不管距离多少，先开诱骗
+    // ----------------------------------------------------------------
     if (!m_isAutoSpoofingRunning) {
-        log(QString("[自动决策] 发现威胁 (%1m) -> 启动诱骗(圆周)").arg(distance, 0, 'f', 0));
+        log("[自动决策] 发现威胁 -> 启动诱骗(圆周)");
 
+        // 严格按照：设坐标 -> 开开关 -> 设模式
         m_spoofDriver->setPosition(Config::BASE_LON, Config::BASE_LAT, 0);
         m_spoofDriver->setSwitch(true);
-        m_spoofDriver->startCircular(500, 50);
+        m_spoofDriver->startCircular(500, 50); // 半径500，速度50
 
         m_isAutoSpoofingRunning = true;
     }
 
-    // ---------------------------------------------------
-    // C. 距离分级处理 (压制)
-    // ---------------------------------------------------
+    // ----------------------------------------------------------------
+    // 场景 4: 触发压制 (第二优先级，看距离)
+    // ----------------------------------------------------------------
     if (distance <= 1000.0) {
-        // [红区] < 1000m : 开启压制
+        // [红区] < 1000m : 必须开启压制
         if (!m_isRelaySuppressionRunning) {
-            log(QString("[自动决策] 进入红区 (%1m) -> 开启压制").arg(distance, 0, 'f', 0));
+            log(QString("[自动决策] 进入红区 (%1m) -> 开启压制").arg(distance));
             if (m_relayDriver) m_relayDriver->setAll(true);
             m_isRelaySuppressionRunning = true;
         }
     }
     else {
-        // [黄区] > 1000m : 关闭压制 (压制可以立即关，也可以跟防抖走，这里保持原样立即关)
+        // [黄区] > 1000m : 必须关闭压制 (但保持诱骗)
+        // 比如测试时没坐标，distance=999999，就会进到这里，只开诱骗
         if (m_isRelaySuppressionRunning) {
             log("[自动决策] 离开红区 -> 停止压制");
             if (m_relayDriver) m_relayDriver->setAll(false);
@@ -202,7 +232,7 @@ void DeviceManager::processDecision(bool hasDrone, double distance)
     }
 }
 
-// (手动模式代码保持不变，此处省略...)
+// (手动模式代码保持不变)
 void DeviceManager::setManualSpoofSwitch(bool enable) { if(m_spoofDriver) m_spoofDriver->setSwitch(enable); }
 void DeviceManager::setManualCircular() { m_spoofDriver->setPosition(Config::BASE_LON, Config::BASE_LAT, 0); m_spoofDriver->setSwitch(true); m_spoofDriver->startCircular(100, 50); }
 void DeviceManager::setManualDirection(SpoofDirection dir) { m_spoofDriver->setPosition(Config::BASE_LON, Config::BASE_LAT, 0); m_spoofDriver->setSwitch(true); m_spoofDriver->startDirectional(dir, 15.0); }
