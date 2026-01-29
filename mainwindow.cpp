@@ -14,51 +14,34 @@
 #include "src/UI/jammerconfdialog.h"
 #include "src/UI/relaydialog.h"
 
-
-
 // ============================================================================
-// 无人机卡片
+// 卡片创建函数
 // ============================================================================
 QWidget* MainWindow::createDroneCard(const DroneInfo &info) {
-    // 1. 创建卡片 Frame
     QFrame *card = new QFrame(this);
     card->setFrameShape(QFrame::Box);
     card->setFrameShadow(QFrame::Plain);
 
-    // 样式表：背景暗灰 (#2D2D2D)，文字白色，边框浅灰
     card->setStyleSheet(
-        "QFrame {"
-        "  background-color: #2D2D2D;"   // 暗色背景
-        "  color: #FFFFFF;"              // 白色文字
-        "  border: 1px solid #505050;"   // 边框
-        "  border-radius: 4px;"
-        "}"
-        "QLabel {"
-        "  border: none;"                // 内部标签不需要边框
-        "  background: transparent;"     // 标签背景透明
-        "}"
+        "QFrame { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #505050; border-radius: 4px; }"
+        "QLabel { border: none; background: transparent; }"
         );
 
-    // 2. 垂直布局
     QVBoxLayout *layout = new QVBoxLayout(card);
-    layout->setSpacing(4);           // 行间距
-    layout->setContentsMargins(10, 10, 10, 10); // 内边距
+    layout->setSpacing(4);
+    layout->setContentsMargins(10, 10, 10, 10);
 
-    // 3. 标题 (加粗，稍微大一点)
     QLabel *lblTitle = new QLabel(QString("机型: %1").arg(info.model_name), card);
     QFont titleFont;
     titleFont.setBold(true);
-    titleFont.setPointSize(14); // 字号大一点
+    titleFont.setPointSize(14);
     lblTitle->setFont(titleFont);
-    // 标题可以用个醒目的颜色 (比如橙色) 或者保持白色，这里用浅黄色区分一下
     lblTitle->setStyleSheet("color: #FFD700;");
     layout->addWidget(lblTitle);
 
-    // 4. 详细信息 (一行一个，恢复所有字段)
-    // 使用 lambda 简化重复代码
     auto addRow = [&](QString label, QString value) {
         QLabel *lbl = new QLabel(QString("%1: %2").arg(label).arg(value), card);
-        lbl->setStyleSheet("font-size: 12px;"); // 普通文字大小
+        lbl->setStyleSheet("font-size: 12px;");
         layout->addWidget(lbl);
     };
 
@@ -67,11 +50,8 @@ QWidget* MainWindow::createDroneCard(const DroneInfo &info) {
     addRow("方位角", QString::number(info.azimuth, 'f', 1) + "°");
     addRow("频率", QString::number(info.freq, 'f', 1) + " MHz");
     addRow("高度", QString::number(info.height, 'f', 1) + " m");
-
-    // 坐标保留6位小数
     addRow("无人机坐标", QString("%1, %2").arg(info.uav_lat, 0, 'f', 6).arg(info.uav_lng, 0, 'f', 6));
     addRow("飞手坐标", QString("%1, %2").arg(info.pilot_lat, 0, 'f', 6).arg(info.pilot_lng, 0, 'f', 6));
-
     addRow("飞手距离", QString::number(info.pilot_distance, 'f', 1) + " m");
     addRow("速度", info.velocity);
     addRow("UUID", info.uuid);
@@ -79,22 +59,13 @@ QWidget* MainWindow::createDroneCard(const DroneInfo &info) {
     return card;
 }
 
-// ============================================================================
-// 图传卡片
-// ============================================================================
 QWidget* MainWindow::createImageCard(const ImageInfo &info) {
     QFrame *card = new QFrame(this);
     card->setFrameShape(QFrame::Box);
     card->setFrameShadow(QFrame::Plain);
 
-    // 样式表：暗色背景，白色文字
     card->setStyleSheet(
-        "QFrame {"
-        "  background-color: #2D2D2D;"
-        "  color: #FFFFFF;"
-        "  border: 1px solid #505050;"
-        "  border-radius: 4px;"
-        "}"
+        "QFrame { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #505050; border-radius: 4px; }"
         "QLabel { border: none; background: transparent; }"
         );
 
@@ -102,30 +73,31 @@ QWidget* MainWindow::createImageCard(const ImageInfo &info) {
     layout->setSpacing(4);
     layout->setContentsMargins(10, 10, 10, 10);
 
-    // 标题
-    QString typeStr = (info.type == 1) ? "信号: FPV图传" : "信号: 无人机";
+    // 根据类型显示不同标题颜色
+    // Type 1 = FPV (0x06), Type 0 = Image/Spectrum (0x07)
+    QString typeStr = (info.type == 1) ? "信号: FPV (0x06)" : "信号: 图传 (0x07)";
     QLabel *lblTitle = new QLabel(typeStr, card);
     QFont titleFont;
     titleFont.setBold(true);
     titleFont.setPointSize(14);
     lblTitle->setFont(titleFont);
-    lblTitle->setStyleSheet("color: #00BFFF;"); // 蓝色标题
+
+    // FPV用蓝色，图传用绿色区分
+    lblTitle->setStyleSheet(info.type == 1 ? "color: #00BFFF;" : "color: #32CD32;");
     layout->addWidget(lblTitle);
 
-    // 内容
     layout->addWidget(new QLabel(QString("ID: %1").arg(info.id), card));
     layout->addWidget(new QLabel(QString("频率: %1 MHz").arg(info.freq, 0, 'f', 1), card));
     layout->addWidget(new QLabel(QString("强度: %1").arg(info.amplitude, 0, 'f', 1), card));
 
-    // 时间
-    QDateTime time = QDateTime::fromMSecsSinceEpoch(info.mes);
+    QDateTime time = QDateTime::fromMSecsSinceEpoch(QDateTime::currentMSecsSinceEpoch());
     layout->addWidget(new QLabel(QString("时间: %1").arg(time.toString("HH:mm:ss")), card));
 
     return card;
 }
 
 // ============================================================================
-// 主窗口构造函数
+// 主窗口构造
 // ============================================================================
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -133,120 +105,32 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // =============================================
-    // 1. 布局比例设置
-    // =============================================
-    ui->gridLayout_Main->setColumnStretch(0, 1); // 左侧列表
-    ui->gridLayout_Main->setColumnStretch(1, 3); // 中间地图 (给大一点空间)
-    ui->gridLayout_Main->setColumnStretch(2, 1); // 右侧控制
+    // 1. 布局
+    ui->gridLayout_Main->setColumnStretch(0, 1);
+    ui->gridLayout_Main->setColumnStretch(1, 3);
+    ui->gridLayout_Main->setColumnStretch(2, 1);
+    ui->gridLayout_Main->setRowStretch(0, 4);
+    ui->gridLayout_Main->setRowStretch(1, 1);
 
-    ui->gridLayout_Main->setRowStretch(0, 4); // 主界面高度
-    ui->gridLayout_Main->setRowStretch(1, 1); // 日志高度
-
-    // =============================================
-    // 2. 初始化雷达控件 (天地图)
-    // =============================================
+    // 2. 雷达
     m_radar = new RadarView(this);
     ui->groupBox_Radar->layout()->addWidget(m_radar);
     if (ui->widgetRadar) ui->widgetRadar->hide();
 
-    // =============================================
-    // 3. 重构左侧布局 (朴素风格: 按钮 + Stack)
-    // =============================================
+    // 3. 构建左侧 UI (无人机, FPV, 图传)
+    setupLeftPanel();
 
-    // 3.0 清除旧控件
-    if (ui->groupBox_Targets->layout()) {
-        QLayoutItem *item;
-        while ((item = ui->groupBox_Targets->layout()->takeAt(0)) != nullptr) {
-            if(item->widget()) delete item->widget();
-            delete item;
-        }
-        delete ui->groupBox_Targets->layout();
-    }
-
-    // 3.1 左侧主布局
-    QVBoxLayout *leftMainLayout = new QVBoxLayout(ui->groupBox_Targets);
-    leftMainLayout->setContentsMargins(5, 5, 5, 5);
-    leftMainLayout->setSpacing(5);
-
-    // --- 3.2 顶部切换按钮组 ---
-    QHBoxLayout *btnLayout = new QHBoxLayout();
-
-    m_btnSwitchDrone = new QPushButton("无人机列表", this);
-    m_btnSwitchDrone->setFixedHeight(30); // 稍微设个高度，其他保持默认灰
-
-    m_btnSwitchImage = new QPushButton("图传/频谱", this);
-    m_btnSwitchImage->setFixedHeight(30);
-
-    btnLayout->addWidget(m_btnSwitchDrone);
-    btnLayout->addWidget(m_btnSwitchImage);
-
-    // 告警红点 (放在最右边)
-    btnLayout->addStretch();
-    m_lblAlertCount = new QLabel("0", this);
-    // 红点还是要稍微醒目一点，不然看不见
-    m_lblAlertCount->setStyleSheet("background-color: red; color: white; border-radius: 8px; padding: 2px 6px; font-weight: bold; font-size: 11px;");
-    m_lblAlertCount->hide();
-    btnLayout->addWidget(m_lblAlertCount);
-
-    leftMainLayout->addLayout(btnLayout);
-
-    // --- 3.3 内容堆叠区域 (StackedWidget) ---
-    m_leftStack = new QStackedWidget(this);
-    leftMainLayout->addWidget(m_leftStack);
-
-    // [页面 0] 无人机列表
-    QScrollArea *scrollDrone = new QScrollArea();
-    scrollDrone->setWidgetResizable(true);
-    scrollDrone->setStyleSheet("background-color: #1E1E1E; border: none;");
-
-    m_droneListContainer = new QWidget();
-    m_droneListLayout = new QVBoxLayout(m_droneListContainer);
-    m_droneListLayout->setAlignment(Qt::AlignTop);
-    m_droneListLayout->setSpacing(5); // 列表项间距
-    scrollDrone->setWidget(m_droneListContainer);
-
-    m_leftStack->addWidget(scrollDrone);
-
-    // [页面 1] 图传/频谱列表
-    QScrollArea *scrollImage = new QScrollArea();
-    scrollImage->setWidgetResizable(true);
-
-    scrollImage->setStyleSheet("background-color: #1E1E1E; border: none;");
-
-    m_imageListContainer = new QWidget();
-    m_imageListLayout = new QVBoxLayout(m_imageListContainer);
-    m_imageListLayout->setAlignment(Qt::AlignTop);
-    m_imageListLayout->setSpacing(5);
-    scrollImage->setWidget(m_imageListContainer);
-
-    m_leftStack->addWidget(scrollImage);
-
-    // --- 3.4 按钮点击切换逻辑 ---
-    connect(m_btnSwitchDrone, &QPushButton::clicked, this, [this](){
-        m_leftStack->setCurrentIndex(0);
-    });
-    connect(m_btnSwitchImage, &QPushButton::clicked, this, [this](){
-        m_leftStack->setCurrentIndex(1);
-    });
-
-    // =============================================
-    // 4. 重构右侧布局 (统一面板: 诱骗在上，干扰在下)
-    // =============================================
-
-    // A. 隐藏旧控件
+    // 4. 重构右侧布局
     ui->btnAutoMode->hide();
     ui->btnSpoof->hide();
     if (ui->line) ui->line->hide();
     ui->groupBox_Control->hide();
 
-    // B. 创建右侧总容器
     QWidget *rightPanel = new QWidget(this);
     QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(10);
 
-    // C. 顶部 Header (系统状态 + 自动模式)
     QWidget *headerWidget = new QWidget(this);
     headerWidget->setStyleSheet("background-color: #1E1E1E; border-radius: 8px;");
     headerWidget->setFixedHeight(60);
@@ -269,9 +153,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     rightLayout->addWidget(headerWidget);
 
-    // =============================================
-    // D. 构建统一的 "作战控制" 面板
-    // =============================================
     QGroupBox *controlGroup = new QGroupBox("作战控制", this);
     controlGroup->setStyleSheet(
         "QGroupBox { border: 1px solid #444; border-radius: 5px; margin-top: 20px; font-weight: bold; color: #00FF00; }"
@@ -281,44 +162,25 @@ MainWindow::MainWindow(QWidget *parent)
     ctrlLayout->setContentsMargins(15, 25, 15, 15);
     ctrlLayout->setSpacing(10);
 
-    // --- PART 1: 诱骗模式 (SPOOF) ---
+    // --- PART 1: 诱骗 ---
     QLabel *lblSpoofTitle = new QLabel("诱骗模式 (SPOOF)", this);
     lblSpoofTitle->setStyleSheet("color: #00FF00; font-weight: bold; font-size: 13px; margin-bottom: 5px;");
     lblSpoofTitle->setAlignment(Qt::AlignCenter);
     ctrlLayout->addWidget(lblSpoofTitle);
 
-    // 线条 1 (诱骗标题下方)
     QFrame *line1 = new QFrame(this);
     line1->setFrameShape(QFrame::HLine);
-    line1->setStyleSheet("color: #444;"); // 实线
+    line1->setStyleSheet("color: #444;");
     ctrlLayout->addWidget(line1);
 
-    // 复选框
     QString chkStyle = "QCheckBox { color: #CCC; font-size: 14px; spacing: 8px; } QCheckBox::indicator { width: 18px; height: 18px; }";
-
-    m_chkCircle = new QCheckBox("圆周驱离 (默认)", this);
-    m_chkCircle->setStyleSheet(chkStyle);
-    ctrlLayout->addWidget(m_chkCircle);
-
-    m_chkNorth = new QCheckBox("定向驱离：北 (North)", this);
-    m_chkNorth->setStyleSheet(chkStyle);
-    ctrlLayout->addWidget(m_chkNorth);
-
-    m_chkEast = new QCheckBox("定向驱离：东 (East)", this);
-    m_chkEast->setStyleSheet(chkStyle);
-    ctrlLayout->addWidget(m_chkEast);
-
-    m_chkSouth = new QCheckBox("定向驱离：南 (South)", this);
-    m_chkSouth->setStyleSheet(chkStyle);
-    ctrlLayout->addWidget(m_chkSouth);
-
-    m_chkWest = new QCheckBox("定向驱离：西 (West)", this);
-    m_chkWest->setStyleSheet(chkStyle);
-    ctrlLayout->addWidget(m_chkWest);
-
+    m_chkCircle = new QCheckBox("圆周驱离 (默认)", this); m_chkCircle->setStyleSheet(chkStyle); ctrlLayout->addWidget(m_chkCircle);
+    m_chkNorth = new QCheckBox("定向驱离：北 (North)", this); m_chkNorth->setStyleSheet(chkStyle); ctrlLayout->addWidget(m_chkNorth);
+    m_chkEast = new QCheckBox("定向驱离：东 (East)", this); m_chkEast->setStyleSheet(chkStyle); ctrlLayout->addWidget(m_chkEast);
+    m_chkSouth = new QCheckBox("定向驱离：南 (South)", this); m_chkSouth->setStyleSheet(chkStyle); ctrlLayout->addWidget(m_chkSouth);
+    m_chkWest = new QCheckBox("定向驱离：西 (West)", this); m_chkWest->setStyleSheet(chkStyle); ctrlLayout->addWidget(m_chkWest);
     m_chkCircle->setChecked(true);
 
-    // 执行诱骗按钮
     m_btnExecuteSpoof = new QPushButton("开启诱骗 (EXECUTE)", this);
     m_btnExecuteSpoof->setCheckable(true);
     m_btnExecuteSpoof->setMinimumHeight(45);
@@ -328,42 +190,34 @@ MainWindow::MainWindow(QWidget *parent)
         );
     ctrlLayout->addWidget(m_btnExecuteSpoof);
 
-    // --- PART 2: 干扰/压制 (JAMMING) ---
-    ctrlLayout->addSpacing(25); // 间距
-
-    // 标题
+    // --- PART 2: 干扰 ---
+    ctrlLayout->addSpacing(25);
     QLabel *lblJamTitle = new QLabel("干扰/压制 (JAMMING)", this);
     lblJamTitle->setStyleSheet("color: #FFA500; font-weight: bold; font-size: 13px; margin-bottom: 5px;");
     lblJamTitle->setAlignment(Qt::AlignCenter);
     ctrlLayout->addWidget(lblJamTitle);
 
-    // 线条 2 (干扰标题下方)
     QFrame *line2 = new QFrame(this);
     line2->setFrameShape(QFrame::HLine);
-    line2->setStyleSheet("color: #444;"); // 实线
+    line2->setStyleSheet("color: #444;");
     ctrlLayout->addWidget(line2);
 
-    // 按钮组
-    ui->btnRelayControl->setParent(controlGroup);
-    ui->btnRelayControl->setMinimumHeight(40);
-    ctrlLayout->addWidget(ui->btnRelayControl);
-
-    ui->btnJammerConfig->setParent(controlGroup);
-    ui->btnJammerConfig->setMinimumHeight(40);
-    ctrlLayout->addWidget(ui->btnJammerConfig);
-
-    ui->btnJammer->setParent(controlGroup);
-    ui->btnJammer->setMinimumHeight(40);
-    ctrlLayout->addWidget(ui->btnJammer);
+    ui->btnRelayControl->setParent(controlGroup); ui->btnRelayControl->setMinimumHeight(40); ctrlLayout->addWidget(ui->btnRelayControl);
+    ui->btnJammerConfig->setParent(controlGroup); ui->btnJammerConfig->setMinimumHeight(40); ctrlLayout->addWidget(ui->btnJammerConfig);
+    ui->btnJammer->setParent(controlGroup); ui->btnJammer->setMinimumHeight(40); ctrlLayout->addWidget(ui->btnJammer);
 
     ctrlLayout->addStretch();
-
     rightLayout->addWidget(controlGroup);
     ui->gridLayout_Main->addWidget(rightPanel, 0, 2, 2, 1);
 
-    // =============================================
-    // 5. 初始化信号连接
-    // =============================================
+    // 5. 初始化
+    m_deviceManager = new DeviceManager(this);
+
+    m_uiTimer = new QTimer(this);
+    m_uiTimer->setInterval(500);
+    connect(m_uiTimer, &QTimer::timeout, this, &MainWindow::onUiRefreshTimeout);
+    m_uiTimer->start();
+
     initConnections();
 }
 
@@ -373,7 +227,85 @@ MainWindow::~MainWindow()
 }
 
 // ============================================================================
-// 槽函数实现
+// 初始化左侧面板
+// ============================================================================
+void MainWindow::setupLeftPanel()
+{
+    if (ui->groupBox_Targets->layout()) {
+        QLayoutItem *item;
+        while ((item = ui->groupBox_Targets->layout()->takeAt(0)) != nullptr) {
+            if(item->widget()) delete item->widget();
+            delete item;
+        }
+        delete ui->groupBox_Targets->layout();
+    }
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(ui->groupBox_Targets);
+    mainLayout->setContentsMargins(5, 5, 5, 5);
+    mainLayout->setSpacing(5);
+
+    // 1. 顶部按钮 (无人机 | FPV | 图传)
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    btnLayout->setSpacing(2);
+
+    m_btnDrone = new QPushButton("无人机 (0)", this);
+    m_btnFPV   = new QPushButton("FPV (0)", this);    // 对应 0x06
+    m_btnImage = new QPushButton("图传 (0)", this);   // 对应 0x07
+
+    m_btnDrone->setFixedHeight(35);
+    m_btnFPV->setFixedHeight(35);
+    m_btnImage->setFixedHeight(35);
+
+    m_btnDrone->setCheckable(true);
+    m_btnFPV->setCheckable(true);
+    m_btnImage->setCheckable(true);
+    m_btnDrone->setChecked(true); // 默认选第一个
+
+    btnLayout->addWidget(m_btnDrone);
+    btnLayout->addWidget(m_btnFPV);
+    btnLayout->addWidget(m_btnImage);
+
+    mainLayout->addLayout(btnLayout);
+
+    // 2. 堆叠窗口
+    m_leftStack = new QStackedWidget(this);
+    mainLayout->addWidget(m_leftStack);
+
+    auto createListContainer = [&](QWidget*& container, QVBoxLayout*& layout) {
+        QScrollArea *scroll = new QScrollArea();
+        scroll->setWidgetResizable(true);
+        scroll->setStyleSheet("background-color: #1E1E1E; border: none;");
+
+        container = new QWidget();
+        container->setStyleSheet("background: transparent;");
+
+        layout = new QVBoxLayout(container);
+        layout->setAlignment(Qt::AlignTop);
+        layout->setSpacing(5);
+
+        scroll->setWidget(container);
+        m_leftStack->addWidget(scroll);
+    };
+
+    createListContainer(m_droneContainer, m_droneLayout); // Index 0: 无人机
+    createListContainer(m_fpvContainer,   m_fpvLayout);   // Index 1: FPV
+    createListContainer(m_imageContainer, m_imageLayout); // Index 2: 图传
+
+    // 3. 切换逻辑
+    auto updateBtnState = [&](int index) {
+        m_leftStack->setCurrentIndex(index);
+        m_btnDrone->setChecked(index == 0);
+        m_btnFPV->setChecked(index == 1);
+        m_btnImage->setChecked(index == 2);
+    };
+
+    connect(m_btnDrone, &QPushButton::clicked, this, [=](){ updateBtnState(0); });
+    connect(m_btnFPV,   &QPushButton::clicked, this, [=](){ updateBtnState(1); });
+    connect(m_btnImage, &QPushButton::clicked, this, [=](){ updateBtnState(2); });
+}
+
+// ============================================================================
+// 数据处理槽 (分流到不同的 Cache)
 // ============================================================================
 
 void MainWindow::slotUpdateLog(const QString &msg)
@@ -384,81 +316,140 @@ void MainWindow::slotUpdateLog(const QString &msg)
 
 void MainWindow::slotUpdateDroneList(const QList<DroneInfo> &drones)
 {
-    // 1. 清空当前列表
-    QLayoutItem *child;
-    while ((child = m_droneListLayout->takeAt(0)) != nullptr) {
-        if(child->widget()) delete child->widget();
-        delete child;
-    }
-
-    // 2. 重新添加卡片
-    for (const auto &drone : drones) {
-        m_droneListLayout->addWidget(createDroneCard(drone));
-    }
-
-    // --- 3. 更新地图 ---
-    QList<RadarTarget> mapTargets;
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
     for (const auto &d : drones) {
-        RadarTarget t;
-        t.id = d.uav_id;
-        // 【关键修改】不再传距离，而是传经纬度
-        t.lat = d.uav_lat;
-        t.lng = d.uav_lng;
-        t.angle = d.azimuth;
-        mapTargets.append(t);
-    }
-    if (m_radar) m_radar->updateTargets(mapTargets);
-
-    // 4. 更新状态文字
-    if (drones.isEmpty()) {
-        ui->label_SystemStatus->setText("系统状态: 扫描中...");
-        ui->label_SystemStatus->setStyleSheet("color: #00ff00;");
-    } else {
-        ui->label_SystemStatus->setText(QString("系统状态: 发现威胁 (%1)").arg(drones.size()));
-        ui->label_SystemStatus->setStyleSheet("color: #ff0000; font-weight: bold; font-size: 14px;");
+        m_droneCache.insert(d.uav_id, d);
+        m_lastSeenTime.insert(d.uav_id, now);
     }
 }
 
 void MainWindow::slotUpdateImageList(const QList<ImageInfo> &images)
 {
-    // 1. 清空
-    QLayoutItem *child;
-    while ((child = m_imageListLayout->takeAt(0)) != nullptr) {
-        if(child->widget()) delete child->widget();
-        delete child;
-    }
-
-    // 2. 添加
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
     for (const auto &img : images) {
-        m_imageListLayout->addWidget(createImageCard(img));
+        // 根据 Type 分流
+        if (img.type == 1) {
+            // Type 1 = FPV (0x06) -> 存入 FPV Cache
+            m_fpvCache.insert(img.id, img);
+            m_lastSeenTime.insert(img.id, now);
+        } else {
+            // Type 0 = Image/Spectrum (0x07) -> 存入 Image Cache
+            m_imageCache.insert(img.id, img);
+            m_lastSeenTime.insert(img.id, now);
+        }
     }
 }
 
 void MainWindow::slotUpdateAlertCount(int count)
 {
-    m_lblAlertCount->setText(QString::number(count));
-    if (count > 0) {
-        m_lblAlertCount->show();
-    } else {
-        m_lblAlertCount->hide();
-    }
+    Q_UNUSED(count);
 }
 
 void MainWindow::slotUpdateDevicePos(double lat, double lng)
 {
-    // 将设备位置传给地图作为中心点
-    if (m_radar) {
-        // 如果正在拖拽地图，可能不希望强制居中，这里看你需求
-        // 简单起见，我们每次收到位置都居中
-        m_radar->setCenterPosition(lat, lng);
+    if (m_radar) m_radar->setCenterPosition(lat, lng);
+}
+
+// ============================================================================
+// 定时刷新逻辑
+// ============================================================================
+void MainWindow::onUiRefreshTimeout()
+{
+    // 1. 清理过期
+    cleanExpiredTargets();
+
+    // 2. 更新按钮文字
+    m_btnDrone->setText(QString("无人机 (%1)").arg(m_droneCache.size()));
+    m_btnFPV->setText(QString("FPV (%1)").arg(m_fpvCache.size()));
+    m_btnImage->setText(QString("图传 (%1)").arg(m_imageCache.size()));
+
+    // 3. 刷新当前页
+    int idx = m_leftStack->currentIndex();
+
+    if (idx == 0) { // 无人机
+        QLayoutItem *child;
+        while ((child = m_droneLayout->takeAt(0)) != nullptr) {
+            if (child->widget()) delete child->widget();
+            delete child;
+        }
+        for (const auto &info : m_droneCache) {
+            m_droneLayout->addWidget(createDroneCard(info));
+        }
+
+        QList<RadarTarget> mapTargets;
+        for (const auto &d : m_droneCache) {
+            RadarTarget t;
+            t.id = d.uav_id;
+            t.lat = d.uav_lat;
+            t.lng = d.uav_lng;
+            t.angle = d.azimuth;
+            mapTargets.append(t);
+        }
+        if (m_radar) m_radar->updateTargets(mapTargets);
+
+        if (m_droneCache.isEmpty()) {
+            ui->label_SystemStatus->setText("系统状态: 扫描中...");
+            ui->label_SystemStatus->setStyleSheet("color: #00ff00;");
+        } else {
+            ui->label_SystemStatus->setText(QString("系统状态: 发现威胁 (%1)").arg(m_droneCache.size()));
+            ui->label_SystemStatus->setStyleSheet("color: #ff0000; font-weight: bold; font-size: 14px;");
+        }
+    }
+    else if (idx == 1) { // FPV
+        QLayoutItem *child;
+        while ((child = m_fpvLayout->takeAt(0)) != nullptr) {
+            if (child->widget()) delete child->widget();
+            delete child;
+        }
+        for (const auto &info : m_fpvCache) {
+            m_fpvLayout->addWidget(createImageCard(info));
+        }
+    }
+    else if (idx == 2) { // 图传
+        QLayoutItem *child;
+        while ((child = m_imageLayout->takeAt(0)) != nullptr) {
+            if (child->widget()) delete child->widget();
+            delete child;
+        }
+        for (const auto &info : m_imageCache) {
+            m_imageLayout->addWidget(createImageCard(info));
+        }
+    }
+}
+
+void MainWindow::cleanExpiredTargets()
+{
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    int timeout = 4000;
+
+    auto itD = m_droneCache.begin();
+    while (itD != m_droneCache.end()) {
+        if (now - m_lastSeenTime.value(itD.key(), 0) > timeout) {
+            m_lastSeenTime.remove(itD.key());
+            itD = m_droneCache.erase(itD);
+        } else ++itD;
+    }
+
+    auto itF = m_fpvCache.begin();
+    while (itF != m_fpvCache.end()) {
+        if (now - m_lastSeenTime.value(itF.key(), 0) > timeout) {
+            m_lastSeenTime.remove(itF.key());
+            itF = m_fpvCache.erase(itF);
+        } else ++itF;
+    }
+
+    auto itI = m_imageCache.begin();
+    while (itI != m_imageCache.end()) {
+        if (now - m_lastSeenTime.value(itI.key(), 0) > timeout) {
+            m_lastSeenTime.remove(itI.key());
+            itI = m_imageCache.erase(itI);
+        } else ++itI;
     }
 }
 
 // ============================================================================
-// 交互逻辑
+// 信号连接
 // ============================================================================
-
-// 互斥逻辑：CheckBox 版本
 void MainWindow::handleSpoofCheckBoxMutex(QCheckBox* current)
 {
     if (current->isChecked()) {
@@ -468,7 +459,6 @@ void MainWindow::handleSpoofCheckBoxMutex(QCheckBox* current)
         if (current != m_chkSouth)  m_chkSouth->setChecked(false);
         if (current != m_chkWest)   m_chkWest->setChecked(false);
     } else {
-        // 如果当前被取消勾选，且没有其他被选中（确保至少选一个），则强制选回圆周
         if (!m_chkCircle->isChecked() && !m_chkNorth->isChecked() &&
             !m_chkEast->isChecked() && !m_chkSouth->isChecked() && !m_chkWest->isChecked()) {
             m_chkCircle->setChecked(true);
@@ -478,23 +468,26 @@ void MainWindow::handleSpoofCheckBoxMutex(QCheckBox* current)
 
 void MainWindow::initConnections()
 {
+    connect(m_deviceManager, &DeviceManager::sigLogMessage, this, &MainWindow::slotUpdateLog);
+    connect(m_deviceManager, &DeviceManager::sigDroneList,  this, &MainWindow::slotUpdateDroneList);
+    connect(m_deviceManager, &DeviceManager::sigImageList,  this, &MainWindow::slotUpdateImageList);
+    connect(m_deviceManager, &DeviceManager::sigAlertCount, this, &MainWindow::slotUpdateAlertCount);
+    connect(m_deviceManager, &DeviceManager::sigSelfPosition, this, &MainWindow::slotUpdateDevicePos);
+
     connect(m_autoSwitch, &ToggleSwitch::toggled, this, [this](bool checked){
         emit sigSetAutoMode(checked);
         slotUpdateLog(checked ? ">>> [模式] 切换至自动接管 (AUTO)" : ">>> [模式] 切换至手动操作 (MANUAL)");
     });
 
-    // 【修改】连接 CheckBox 的 toggled 信号
     connect(m_chkCircle, &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkCircle); });
     connect(m_chkNorth,  &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkNorth); });
     connect(m_chkEast,   &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkEast); });
     connect(m_chkSouth,  &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkSouth); });
     connect(m_chkWest,   &QCheckBox::toggled, this, [this](){ handleSpoofCheckBoxMutex(m_chkWest); });
 
-    // 【修改】执行按钮逻辑：检查 CheckBox 状态
     connect(m_btnExecuteSpoof, &QPushButton::toggled, this, [this](bool checked){
         if (checked) {
             m_btnExecuteSpoof->setText("停止诱骗 (STOP)");
-            // 判断哪个被勾选
             if (m_chkCircle->isChecked()) { emit sigManualSpoofCircle(); slotUpdateLog(">>> [指令] 启动诱骗 -> 圆周模式"); }
             else if (m_chkNorth->isChecked()) { emit sigManualSpoofNorth(); slotUpdateLog(">>> [指令] 启动诱骗 -> 北 (N)"); }
             else if (m_chkEast->isChecked())  { emit sigManualSpoofEast();  slotUpdateLog(">>> [指令] 启动诱骗 -> 东 (E)"); }
