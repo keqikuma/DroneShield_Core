@@ -5,6 +5,9 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
+#include <QFile>        // 记得加这个
+#include <QTextStream>  // 记得加这个
+#include <QDateTime>    // 记得加这个
 #include "../DataStructs.h"
 
 class DetectionDriver : public QObject
@@ -14,7 +17,6 @@ public:
     explicit DetectionDriver(QObject *parent = nullptr);
     ~DetectionDriver();
 
-    // 启动监听 (参数 ip 其实不用，默认监听 Any，port 用 8089)
     void startServer(int port);
 
 signals:
@@ -22,31 +24,35 @@ signals:
     void sigImageListUpdated(const QList<ImageInfo> &images);
     void sigAlertCountUpdated(int count);
     void sigDevicePositionUpdated(double lat, double lng);
-    void sigLogMessage(const QString &msg); // 用于输出日志
+
+    // 【关键修改】 必须补上这行声明，否则编译报错
+    void sigLogMessage(const QString &msg);
 
 private slots:
     void onNewConnection();
     void onReadyRead();
     void onSocketDisconnected();
-    void onDataTimeout(); // 数据超时看门狗
+    void onDataTimeout();
 
 private:
     QTcpServer *m_tcpServer;
-    QTcpSocket *m_currentClient; // 当前连接的 Linux 设备
-    QByteArray m_buffer;         // 数据接收缓冲区 (处理粘包)
-    QTimer *m_dataExpiryTimer;   // 超时检测
+    QTcpSocket *m_currentClient;
+    QByteArray m_buffer;
+    QTimer *m_dataExpiryTimer;
 
-    // 解析函数
+    // 解析相关
     void processBuffer();
     void parseJsonData(const QByteArray &jsonBytes);
 
-    // 具体业务解析
     void handleDroneInfo(const QJsonObject &root);
     void handleImageInfo(const QJsonObject &root);
     void handleFpvInfo(const QJsonObject &root);
     void handleDeviceStatus(const QJsonObject &root);
 
     void clearAllData();
+
+    // 日志辅助
+    void writeLog(const QString &msg);
 };
 
 #endif // DETECTIONDRIVER_H

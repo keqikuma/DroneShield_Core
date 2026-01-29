@@ -3,16 +3,15 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDebug>
+#include <QCoreApplication>
 
 DetectionDriver::DetectionDriver(QObject *parent) : QObject(parent)
 {
     m_tcpServer = new QTcpServer(this);
     m_currentClient = nullptr;
 
-    // 监听新连接
     connect(m_tcpServer, &QTcpServer::newConnection, this, &DetectionDriver::onNewConnection);
 
-    // 数据超时看门狗 (3秒无数据则清空界面)
     m_dataExpiryTimer = new QTimer(this);
     m_dataExpiryTimer->setInterval(3000);
     connect(m_dataExpiryTimer, &QTimer::timeout, this, &DetectionDriver::onDataTimeout);
@@ -20,57 +19,61 @@ DetectionDriver::DetectionDriver(QObject *parent) : QObject(parent)
 
 DetectionDriver::~DetectionDriver()
 {
-    if (m_currentClient) {
-        m_currentClient->close();
-    }
+    if (m_currentClient) m_currentClient->close();
     m_tcpServer->close();
+}
+
+void DetectionDriver::writeLog(const QString &msg)
+{
+    // 将日志写入 exe 同级目录下的 log.txt
+    QString path = QCoreApplication::applicationDirPath() + "/app_debug_log.txt";
+    QFile file(path);
+    if (file.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << "[" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "] " << msg << "\n";
+        file.close();
+    }
+    // 同时发信号给界面显示
+    emit sigLogMessage(msg);
 }
 
 void DetectionDriver::startServer(int port)
 {
-    // 监听所有网卡 (0.0.0.0)，端口通常是 8089
     if (m_tcpServer->listen(QHostAddress::Any, port)) {
-        qDebug() << "[Detection] TCP Server 启动成功，监听端口:" << port;
+        writeLog(QString("✅ TCP Server 启动成功，监听端口: %1").arg(port));
     } else {
-        qCritical() << "[Detection] TCP Server 启动失败:" << m_tcpServer->errorString();
+        writeLog(QString("❌ TCP Server 启动失败! 错误: %1").arg(m_tcpServer->errorString()));
     }
 }
-
-// =========================================================
-// 连接管理
-// =========================================================
 
 void DetectionDriver::onNewConnection()
 {
     if (m_currentClient) {
-        // 如果已经有一个连接，把旧的踢掉 (只允许一个设备连接)
         m_currentClient->close();
         m_currentClient->deleteLater();
     }
 
     m_currentClient = m_tcpServer->nextPendingConnection();
-    qDebug() << "[Detection] Linux 设备已连接:" << m_currentClient->peerAddress().toString();
+    QString ip = m_currentClient->peerAddress().toString();
+    writeLog(QString("🔗 新客户端连接: %1").arg(ip));
 
     connect(m_currentClient, &QTcpSocket::readyRead, this, &DetectionDriver::onReadyRead);
     connect(m_currentClient, &QTcpSocket::disconnected, this, &DetectionDriver::onSocketDisconnected);
 
-    // 连接建立，启动看门狗
     m_dataExpiryTimer->start();
     m_buffer.clear();
 }
 
 void DetectionDriver::onSocketDisconnected()
 {
-    qWarning() << "[Detection] 设备断开连接";
+    writeLog("⚠️ 客户端断开连接");
     m_currentClient->deleteLater();
     m_currentClient = nullptr;
-    onDataTimeout(); // 立即清空数据
+    onDataTimeout();
 }
 
 void DetectionDriver::onDataTimeout()
 {
-    // 没收到数据，清空界面
-    // qDebug() << "[Detection] 数据流超时/断开，清空界面";
     clearAllData();
 }
 
@@ -81,154 +84,180 @@ void DetectionDriver::clearAllData()
     emit sigAlertCountUpdated(0);
 }
 
-// =========================================================
-// 数据接收与粘包处理 (核心)
-// =========================================================
-
 void DetectionDriver::onReadyRead()
 {
     if (!m_currentClient) return;
-
-    // 1. 读取所有新数据追加到缓冲区
     QByteArray newData = m_currentClient->readAll();
+
+    // 简单日志，证明数据进来了
+    if (!newData.isEmpty()) {
+        writeLog(QString("📥 收到数据: %1 字节").arg(newData.size()));
+    }
+
     m_buffer.append(newData);
-
-    // 2. 喂狗 (重置超时时间)
     m_dataExpiryTimer->start();
-
-    // 3. 处理缓冲区
     processBuffer();
 }
 
+// ====================================================================
+// 【核心修改】通用 JSON 提取算法 (花括号计数法)
+// ====================================================================
 void DetectionDriver::processBuffer()
 {
-    // 协议格式: 55 55 55 55 ... { JSON } ... AA AA AA AA
-    // 我们采用最简单的“寻找 JSON 边界”的方法，不依赖头部的长度字段(防止字节序问题)
-
+    // 循环处理缓冲区，直到没有完整的 JSON 为止
     while (true) {
-        // A. 找 JSON 起始符 '{'
-        int startIdx = m_buffer.indexOf('{');
-        if (startIdx == -1) {
-            // 没有起始符，清空之前的垃圾数据，保留最后一部分防止截断(或者直接全清空如果buffer太大)
-            if (m_buffer.size() > 8192) m_buffer.clear();
-            break;
+        int startIdx = -1;
+        int endIdx = -1;
+        int braceCount = 0;
+        bool foundCompleteJson = false;
+
+        // 1. 扫描缓冲区，寻找完整的 {...} 结构
+        for (int i = 0; i < m_buffer.size(); ++i) {
+            char c = m_buffer.at(i);
+
+            if (c == '{') {
+                if (braceCount == 0) startIdx = i; // 记录最外层左括号
+                braceCount++;
+            }
+            else if (c == '}') {
+                if (braceCount > 0) {
+                    braceCount--;
+                    if (braceCount == 0) {
+                        // 找到了匹配的最外层右括号
+                        endIdx = i;
+                        foundCompleteJson = true;
+                        break; // 跳出 for 循环，处理这一段
+                    }
+                }
+            }
         }
 
-        // B. 找 JSON 结束符 '}'
-        // 注意：简单的找 '}' 可能会因为 JSON 嵌套而出错，
-        // 但根据你的日志，数据包是一个完整的 JSON 对象，我们找最后一个匹配的 '}'
-        // 这里简化处理：寻找对应 startIdx 之后的第一个 '}' 是不够的(有嵌套)，
-        // 我们利用栈或者简单找 Buffer 里的 '}' 尝试解析。
+        // 2. 判断是否找到
+        if (foundCompleteJson && startIdx != -1 && endIdx != -1) {
+            // 提取 JSON 字符串
+            int jsonLen = endIdx - startIdx + 1;
+            QByteArray jsonBytes = m_buffer.mid(startIdx, jsonLen);
 
-        // 优化策略：找到 headers "55 55 55 55" 和 tails "AA AA AA AA"
-        // 既然协议有头尾，用头尾更稳
+            // 调试日志：看看提取到了什么 (只打印前50个字符避免刷屏)
+            // writeLog(QString("📝 提取 JSON: %1...").arg(QString(jsonBytes.left(50))));
 
-        // 1. 找头
-        int headIdx = m_buffer.indexOf(QByteArray::fromHex("55555555"));
-        if (headIdx == -1) {
-            if (m_buffer.size() > 8192) m_buffer.clear();
-            break;
-        }
-
-        // 2. 找尾 (从头后面开始找)
-        int tailIdx = m_buffer.indexOf(QByteArray::fromHex("AAAAAAAA"), headIdx);
-        if (tailIdx == -1) {
-            // 包不完整，等待下次数据
-            break;
-        }
-
-        // 3. 提取完整一包数据
-        // 包总长 = (tailIdx + 4) - headIdx
-        int packetLen = (tailIdx + 4) - headIdx;
-        QByteArray packet = m_buffer.mid(headIdx, packetLen);
-
-        // 4. 从包中提取 JSON 字符串
-        int jsonStart = packet.indexOf('{');
-        int jsonEnd = packet.lastIndexOf('}');
-
-        if (jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart) {
-            QByteArray jsonBytes = packet.mid(jsonStart, jsonEnd - jsonStart + 1);
+            // 解析
             parseJsonData(jsonBytes);
-        }
 
-        // 5. 从缓冲区移除已处理的数据
-        m_buffer.remove(0, headIdx + packetLen);
+            // 关键：从缓冲区移除已处理的数据（包括 endIdx 及其之前的所有内容）
+            m_buffer.remove(0, endIdx + 1);
+        } else {
+            // 没找到完整的 JSON，或者数据还没收全
+            // 清理缓冲区头部垃圾：如果 buffer 开头不是 '{' 且长度很大，说明前面是乱码/协议头
+            int firstBrace = m_buffer.indexOf('{');
+            if (firstBrace > 0) {
+                // writeLog(QString("🗑️ 丢弃头部非 JSON 数据: %1 字节").arg(firstBrace));
+                m_buffer.remove(0, firstBrace);
+                continue; // 重新扫描
+            }
+
+            // 如果缓冲区太大还没找到 JSON，强制清空防止内存泄漏
+            if (m_buffer.size() > 100000) {
+                writeLog("❌ 缓冲区溢出，强制清空");
+                m_buffer.clear();
+            }
+
+            break; // 等待下一次 readyRead
+        }
     }
 }
 
-// =========================================================
-// JSON 业务解析
-// =========================================================
-
 void DetectionDriver::parseJsonData(const QByteArray &jsonBytes)
 {
-    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes);
-    if (!doc.isObject()) return;
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &err);
 
+    if (err.error != QJsonParseError::NoError) {
+        writeLog(QString("❌ JSON 格式错误: %1").arg(err.errorString()));
+        return;
+    }
+
+    if (!doc.isObject()) return;
     QJsonObject root = doc.object();
 
-    // 1. 无人机信息
+    // 调试：打印所有收到的 Key，帮你看清到底是什么名字
+    QString keys = root.keys().join(", ");
+    writeLog(QString("🔑 收到 Keys: %1").arg(keys));
+
+    // 根据 Python 脚本的验证结果，Key 应该是下面这些：
     if (root.contains("station_droneInfo")) {
+        writeLog("✅ 解析: 无人机信息");
         handleDroneInfo(root["station_droneInfo"].toObject());
     }
-    // 2. 图传/频谱
     else if (root.contains("imageInfo")) {
+        writeLog("✅ 解析: 图传/频谱");
         handleImageInfo(root["imageInfo"].toObject());
     }
-    // 3. FPV
     else if (root.contains("fpvInfo")) {
+        writeLog("✅ 解析: FPV");
         handleFpvInfo(root["fpvInfo"].toObject());
     }
-    // 4. 基站状态 (包含自身坐标)
     else if (root.contains("device_status") || root.contains("station_pos")) {
+        writeLog("❤️ 解析: 基站状态");
         handleDeviceStatus(root);
+    }
+    else {
+        writeLog("❓ 未知数据包，包含 Keys: " + root.keys().join(", "));
     }
 }
 
 void DetectionDriver::handleDroneInfo(const QJsonObject &data)
 {
-    // data 是 station_droneInfo 层
     QJsonObject trace = data["trace"].toObject();
     if (trace.isEmpty()) return;
 
     QList<DroneInfo> list;
     DroneInfo d;
-    d.uav_id     = trace["uav_id"].toString();
+    d.uav_id = trace["uav_id"].toString();
     d.model_name = trace["model_name"].toString();
 
-    // 注意：日志里的坐标可能是字符串 "0.0" 也可能是数字，这里做个兼容
+    // 坐标兼容
     if (trace["uav_lat"].isString()) d.uav_lat = trace["uav_lat"].toString().toDouble();
     else d.uav_lat = trace["uav_lat"].toDouble();
 
     if (trace["uav_lng"].isString()) d.uav_lng = trace["uav_lng"].toString().toDouble();
     else d.uav_lng = trace["uav_lng"].toDouble();
 
-    d.height = trace["Height"].toDouble(); // 注意大小写，日志是 Height
-    if (d.height == 0) d.height = trace["height"].toDouble(); // 兼容小写
+    // 高度兼容 (Height vs height)
+    if (trace.contains("Height")) d.height = trace["Height"].toDouble();
+    else if (trace.contains("height")) d.height = trace["height"].toDouble();
+    else d.height = 0;
 
     d.freq = trace["freq"].toDouble();
     d.pilot_lat = trace["pilot_lat"].toDouble();
     d.pilot_lng = trace["pilot_lng"].toDouble();
+    d.distance = trace["distance"].toDouble();
+    d.uuid = trace["uuid"].toString();
+    d.azimuth = trace["azimuth"].toDouble(); // 确保有方位角
 
-    // 如果坐标全是 0 或 None，可以给一个特定的状态，但这里直接发给 UI
+    // writeLog(QString(">>> 更新无人机: %1 (ID: %2)").arg(d.model_name).arg(d.uav_id));
+
     list.append(d);
-
     emit sigDroneListUpdated(list);
     emit sigAlertCountUpdated(list.size());
 }
 
 void DetectionDriver::handleImageInfo(const QJsonObject &data)
 {
-    // 构造 ImageInfo
     QList<ImageInfo> list;
     ImageInfo img;
-    img.id = "Spectrum_" + QString::number(data["freq"].toDouble());
+    // 使用频率作为唯一 ID 显示
+    img.id = "Spectrum " + QString::number(data["freq"].toDouble()) + "MHz";
     img.freq = data["freq"].toDouble();
     img.amplitude = data["amplitude"].toDouble();
-    img.type = 0; // 0 代表图传/频谱
-    // img.mes = ... 时间戳
-    list.append(img);
+    img.type = 0; // 图传
 
+    // 如果有协议字段
+    if (data.contains("pro")) {
+        img.id += " (" + data["pro"].toString() + ")";
+    }
+
+    list.append(img);
     emit sigImageListUpdated(list);
 }
 
@@ -236,24 +265,21 @@ void DetectionDriver::handleFpvInfo(const QJsonObject &data)
 {
     QList<ImageInfo> list;
     ImageInfo img;
-    img.id = "FPV_" + QString::number(data["freq"].toDouble());
+    img.id = "FPV " + QString::number(data["freq"].toDouble()) + "MHz";
     img.freq = data["freq"].toDouble();
     img.amplitude = data["amplitude"].toDouble();
-    img.type = 1; // 1 代表 FPV
+    img.type = 1; // FPV
     list.append(img);
-
     emit sigImageListUpdated(list);
 }
 
 void DetectionDriver::handleDeviceStatus(const QJsonObject &root)
 {
-    // 解析基站坐标 (用于更新地图中心点)
-    // 结构可能是 root["station_pos"] -> {lat, lng}
     if (root.contains("station_pos")) {
         QJsonObject pos = root["station_pos"].toObject();
         double lat = pos["lat"].toDouble();
         double lng = pos["lng"].toDouble();
-        if (lat > 0 && lng > 0) {
+        if (lat > 0.1 && lng > 0.1) {
             emit sigDevicePositionUpdated(lat, lng);
         }
     }
