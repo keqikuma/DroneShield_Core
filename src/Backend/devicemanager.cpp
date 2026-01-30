@@ -62,7 +62,13 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
 
     // 4. 压制 (Relay TCP)
     m_relayDriver = new RelayDriver(this);
-    m_relayDriver->connectToDevice(Config::RELAY_IP, Config::RELAY_PORT);
+
+    // 连接日志，这样你就能看到 "[压制] TCP 连接成功" 了
+    connect(m_relayDriver, &RelayDriver::sigLog, this, &DeviceManager::sigLogMessage);
+
+    // 使用你提供的 IP 和 端口
+    // 192.168.10.221 : 4196
+    m_relayDriver->connectToDevice("192.168.10.221", 4196);
 
     log("[DeviceManager] 就绪 (诱骗目标: 192.168.10.230)");
 }

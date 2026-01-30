@@ -2,33 +2,41 @@
 #define RELAYDRIVER_H
 
 #include <QObject>
-#include <QMap>
-#include "../HAL/tcpclient.h"
+#include <QTcpSocket>
 
 class RelayDriver : public QObject
 {
     Q_OBJECT
 public:
     explicit RelayDriver(QObject *parent = nullptr);
+    ~RelayDriver();
 
-    // 连接设备
+    // 连接继电器
     void connectToDevice(const QString &ip, int port);
+    void disconnectDevice();
 
-    // 单路控制 (channel: 1-7, on: true/false)
-    void setChannel(int channel, bool on);
+    // 控制接口
+    void setAll(bool on);               // 全开/全关
+    void setChannel(int channel, bool on); // 单通道控制
 
-    // 全开/全关 (自动模式用)
-    void setAll(bool on);
+signals:
+    // 【新增】日志信号
+    void sigLog(const QString &msg);
+    // 连接状态信号 (可选)
+    void sigConnected(bool isConnected);
+
+private slots:
+    void onConnected();
+    void onDisconnected();
+    void onErrorOccurred(QAbstractSocket::SocketError socketError);
+    void onReadyRead();
 
 private:
-    TcpClient *m_tcpClient;
+    void sendCommand(const QByteArray &data);
 
-    // 辅助：发送 Hex 数据
-    void sendHex(const QByteArray &hex);
-
-    // 协议表
-    QByteArray getChannelCmd(int channel, bool on);
-    QByteArray getAllCmd(bool on);
+    QTcpSocket *m_socket;
+    QString m_targetIp;
+    int m_targetPort;
 };
 
 #endif // RELAYDRIVER_H
