@@ -63,9 +63,6 @@ private:
     // 辅助：记录上一次是否有图传威胁（用于合并判断）
     bool m_hasImageThreat;
 
-    double m_baseLat = 0.0; // 动态获取的基站纬度
-    double m_baseLng = 0.0; // 动态获取的基站经度
-
 signals:
     void sigLogMessage(const QString &msg);
     void sigDroneList(const QList<DroneInfo> &drones);

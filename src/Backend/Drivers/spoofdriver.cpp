@@ -18,6 +18,7 @@ SpoofDriver::SpoofDriver(const QString &targetIp, int targetPort, QObject *paren
         qDebug() << "[SpoofDriver] 成功绑定本地端口: 9098";
         connect(m_udpReceiver, &QUdpSocket::readyRead, this, &SpoofDriver::onReadyRead);
     } else {
+        // 绑定失败只打印日志，不让程序崩溃
         qCritical() << "[SpoofDriver] 绑定 9098 失败:" << m_udpReceiver->errorString();
     }
 
@@ -32,25 +33,46 @@ SpoofDriver::~SpoofDriver()
     if (m_udpReceiver) m_udpReceiver->close();
 }
 
-// 接收数据处理
+// 接收数据处理 (解析基站坐标核心逻辑)
 void SpoofDriver::onReadyRead()
 {
     while (m_udpReceiver->hasPendingDatagrams()) {
         QByteArray datagram;
         datagram.resize(m_udpReceiver->pendingDatagramSize());
-        QHostAddress sender;
-        quint16 senderPort;
+        m_udpReceiver->readDatagram(datagram.data(), datagram.size());
 
-        m_udpReceiver->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
+        // 1. 转为字符串处理
+        // 格式示例: FF0262599{"iSysSta":3, ... "dbFixLon":119.xxx ...}
+        QString rawData = QString::fromUtf8(datagram);
 
-        // 你仍然可以在 IDE 的输出窗口看调试信息，但不要发给 UI
-        // qDebug() << "[Spoof RX] " << datagram.toHex();
+        // 2. 简单的协议校验 (FF开头且长度足够)
+        if (rawData.startsWith("FF") && rawData.length() > 10) {
 
-        // -----------------------------------------------------------
-        // ❌ 屏蔽下面这行，界面就不会显示接收到的协议了
-        // -----------------------------------------------------------
-        // QString logMsg = QString("[Spoof RX] Len=%1").arg(datagram.size());
-        // emit sigSpoofLog(logMsg);
+            // 提取 JSON 部分 (第9位开始到最后)
+            // 0-1: FF, 2-5: Length, 6-8: Code(599), 9...: JSON
+            QString jsonStr = rawData.mid(9);
+
+            // 3. 解析 JSON
+            QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
+            if (doc.isObject()) {
+                QJsonObject obj = doc.object();
+
+                // 【核心】提取经纬度 (兼容 599 或 600 协议)
+                if (obj.contains("dbFixLat") && obj.contains("dbFixLon")) {
+                    double lat = obj["dbFixLat"].toDouble();
+                    double lng = obj["dbFixLon"].toDouble();
+
+                    // 只有当坐标有效(非0)时才更新
+                    // 过滤掉经纬度为0或者极其微小的情况
+                    if (lat > 1.0 && lng > 1.0) {
+                        emit sigDevicePosition(lat, lng);
+
+                        // 调试时可以打开下面这行，看是否收到坐标
+                        // qDebug() << "[Spoof GPS] 基站坐标更新:" << lat << lng;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -71,15 +93,10 @@ void SpoofDriver::sendCommand(const QString &code, const QJsonObject &json)
 
     qint64 ret = m_udpSender->writeDatagram(packet, m_targetAddr, m_targetPort);
 
-
     if (ret == -1) {
-        // ❌ 错误一定要显示
         emit sigSpoofLog(QString("[诱骗异常] 发送失败: %1").arg(m_udpSender->errorString()));
     } else {
-        // ✅ 正常发送不要显示了，否则自动模式下也会一直刷屏
-        // emit sigSpoofLog(QString("[Spoof TX] Cmd: %1").arg(code));
-
-        // 如果你想在 IDE 里看，可以用 qDebug
+        // 正常发送不刷屏日志，仅调试输出
         qDebug() << "[Spoof TX] " << code << jsonBytes;
     }
 }
@@ -135,16 +152,11 @@ void SpoofDriver::sendLogin()
     // CMD: 619 登录
     QJsonObject json;
     json["sKey"] = SKEY;
-
-    // 获取本机在 192.168.10.x 网段的 IP
-    QString myIp = getLocalIP();
-
-    json["sIP"] = myIp;
+    json["sIP"] = getLocalIP();
     json["iPort"] = 9098; // 告诉硬件往 9098 发数据
 
     sendCommand("619", json);
-
-    emit sigSpoofLog(QString("[系统] 发送登录包 -> LocalIP: %1, ListenPort: 9098").arg(myIp));
+    emit sigSpoofLog(QString("[系统] 发送登录包 -> LocalIP: %1, ListenPort: 9098").arg(json["sIP"].toString()));
 }
 
 // 智能获取本机 IP
@@ -154,12 +166,12 @@ QString SpoofDriver::getLocalIP()
     for (const QHostAddress &addr : list) {
         if (addr.protocol() == QAbstractSocket::IPv4Protocol && !addr.isLoopback()) {
             QString ip = addr.toString();
-            // 关键：只匹配与诱骗设备同网段的 IP
+            // 关键：只匹配与诱骗设备同网段的 IP (192.168.10.x)
             if (ip.startsWith("192.168.10.")) {
                 return ip;
             }
         }
     }
-    // 没找到，返回默认值提示用户检查网络
+    // 没找到，返回默认值
     return "192.168.10.100";
 }

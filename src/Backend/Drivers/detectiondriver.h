@@ -2,12 +2,12 @@
 #define DETECTIONDRIVER_H
 
 #include <QObject>
-#include <QTcpServer>
-#include <QTcpSocket>
+#include <QList>
 #include <QTimer>
-#include <QFile>        // 记得加这个
-#include <QTextStream>  // 记得加这个
-#include <QDateTime>    // 记得加这个
+#include <QtWebSockets/QWebSocket>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include "../DataStructs.h"
 
 class DetectionDriver : public QObject
@@ -17,42 +17,39 @@ public:
     explicit DetectionDriver(QObject *parent = nullptr);
     ~DetectionDriver();
 
-    void startServer(int port);
+    void startWork(const QString &url);
+    void stopWork();
 
 signals:
     void sigDroneListUpdated(const QList<DroneInfo> &drones);
     void sigImageListUpdated(const QList<ImageInfo> &images);
-    void sigAlertCountUpdated(int count);
     void sigDevicePositionUpdated(double lat, double lng);
-
-    // 【关键修改】 必须补上这行声明，否则编译报错
-    void sigLogMessage(const QString &msg);
+    void sigLog(const QString &msg);
 
 private slots:
-    void onNewConnection();
-    void onReadyRead();
-    void onSocketDisconnected();
-    void onDataTimeout();
+    void onConnected();
+    void onDisconnected();
+    void onTextMessageReceived(const QString &message);
+    void onReconnectTimeout();
+
+    // 【新增】心跳发送槽函数
+    void onHeartbeatTimeout();
 
 private:
-    QTcpServer *m_tcpServer;
-    QTcpSocket *m_currentClient;
-    QByteArray m_buffer;
-    QTimer *m_dataExpiryTimer;
+    void parseDroneStatus(const QJsonArray &dataArr);
+    void parseImageStatus(const QJsonArray &dataArr);
+    void parseDeviceInfo(const QJsonObject &dataObj);
 
-    // 解析相关
-    void processBuffer();
-    void parseJsonData(const QByteArray &jsonBytes);
+    // 【新增】解析握手包，启动心跳
+    void handleHandshake(const QString &payload);
 
-    void handleDroneInfo(const QJsonObject &root);
-    void handleImageInfo(const QJsonObject &root);
-    void handleFpvInfo(const QJsonObject &root);
-    void handleDeviceStatus(const QJsonObject &root);
+    QWebSocket *m_webSocket;
+    QTimer *m_reconnectTimer;
 
-    void clearAllData();
+    // 【新增】心跳定时器
+    QTimer *m_heartbeatTimer;
 
-    // 日志辅助
-    void writeLog(const QString &msg);
+    QString m_targetUrl;
 };
 
 #endif // DETECTIONDRIVER_H
