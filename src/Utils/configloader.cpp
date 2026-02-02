@@ -40,8 +40,9 @@ void ConfigLoader::initDefaults()
     // 4. 继电器
     m_relay = loadOrSet("RelayDevice", Config::DEFAULT_RELAY_IP, Config::DEFAULT_RELAY_PORT);
 
-    // 5. 功放 (新增)
-    m_amp = loadOrSet("AmpDevice", Config::DEFAULT_AMP_IP, Config::DEFAULT_AMP_PORT);
+    // 5. 功放 (两路：写频开启/关闭时对两路都发指令)
+    m_amp  = loadOrSet("AmpDevice",  Config::DEFAULT_AMP_IP,  Config::DEFAULT_AMP_PORT);
+    m_amp2 = loadOrSet("AmpDevice2", Config::DEFAULT_AMP2_IP, Config::DEFAULT_AMP2_PORT);
 
     settings.sync(); // 确保写入磁盘
 
@@ -51,6 +52,7 @@ void ConfigLoader::initDefaults()
     qDebug() << "  Jammer:" << m_jammer.ip << ":" << m_jammer.port;
     qDebug() << "  Relay :" << m_relay.ip << ":" << m_relay.port;
     qDebug() << "  Amp   :" << m_amp.ip << ":" << m_amp.port;
+    qDebug() << "  Amp2  :" << m_amp2.ip << ":" << m_amp2.port;
 }
 
 NetConfig ConfigLoader::getSpoofConfig() const { return m_spoof; }
@@ -58,3 +60,4 @@ NetConfig ConfigLoader::getDetectConfig() const { return m_detect; }
 NetConfig ConfigLoader::getJammerConfig() const { return m_jammer; }
 NetConfig ConfigLoader::getRelayConfig() const { return m_relay; }
 NetConfig ConfigLoader::getAmpConfig() const { return m_amp; }
+NetConfig ConfigLoader::getAmp2Config() const { return m_amp2; }

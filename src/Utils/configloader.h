@@ -22,6 +22,7 @@ public:
     NetConfig getJammerConfig() const;
     NetConfig getRelayConfig() const;
     NetConfig getAmpConfig() const;
+    NetConfig getAmp2Config() const;
 
 private:
     void initDefaults(); // 初始化/读取配置
@@ -31,6 +32,8 @@ private:
     NetConfig m_jammer;
     NetConfig m_relay;
     NetConfig m_amp;
+    NetConfig m_amp2;
 };
 
 #endif // CONFIGLOADER_H
+

@@ -62,6 +62,7 @@ private slots:
 
     // 【新增】功放连接错误处理
     void onAmpError(QAbstractSocket::SocketError error);
+    void onAmp2Error(QAbstractSocket::SocketError error);
 
 private:
     // 核心决策函数
@@ -105,9 +106,11 @@ private:
 
     bool m_isInObservationMode = false; // 标记当前是否处于"暂停观察"阶段
 
-    // 【新增】功放控制专用 Socket 和配置
+    // 【新增】功放控制：双路长连，写频开/关时对两路都发开/关指令
     QTcpSocket *m_ampSocket;
+    QTcpSocket *m_ampSocket2;
     NetConfig m_currAmpCfg;
+    NetConfig m_currAmp2Cfg;
 
 signals:
     void sigLogMessage(const QString &msg);

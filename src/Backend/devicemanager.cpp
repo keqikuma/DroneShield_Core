@@ -75,7 +75,8 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     NetConfig cfgJammer = configLoader.getJammerConfig();
     m_currDetectCfg = configLoader.getDetectConfig();
     m_currRelayCfg  = configLoader.getRelayConfig();
-    m_currAmpCfg = configLoader.getAmpConfig();
+    m_currAmpCfg    = configLoader.getAmpConfig();
+    m_currAmp2Cfg   = configLoader.getAmp2Config();
 
     log(QString("[Config] 模式: %1").arg(
 #ifdef SIMULATION_MODE
@@ -120,19 +121,23 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent)
     connect(m_relayDriver, &RelayDriver::sigError, this, &DeviceManager::onRelayError);
     m_relayDriver->connectToDevice(m_currRelayCfg.ip, m_currRelayCfg.port);
 
-    // 5. 功放 (PA) 控制 - TCP
+    // 5. 功放 (PA) 控制 - 双路 TCP 长连，写频开/关时对两路都发指令
     // ============================================================
     m_ampSocket = new QTcpSocket(this);
-
-    // 连接错误日志
     connect(m_ampSocket, &QTcpSocket::errorOccurred, this, &DeviceManager::onAmpError);
     connect(m_ampSocket, &QTcpSocket::connected, this, [this](){
-        log("[功放] TCP 连接成功");
+        log("[功放1] TCP 连接成功");
     });
-
-    // 发起连接
-    log(QString("[功放] 正在连接 %1:%2 ...").arg(m_currAmpCfg.ip).arg(m_currAmpCfg.port));
+    log(QString("[功放1] 正在连接 %1:%2 ...").arg(m_currAmpCfg.ip).arg(m_currAmpCfg.port));
     m_ampSocket->connectToHost(m_currAmpCfg.ip, m_currAmpCfg.port);
+
+    m_ampSocket2 = new QTcpSocket(this);
+    connect(m_ampSocket2, &QTcpSocket::errorOccurred, this, &DeviceManager::onAmp2Error);
+    connect(m_ampSocket2, &QTcpSocket::connected, this, [this](){
+        log("[功放2] TCP 连接成功");
+    });
+    log(QString("[功放2] 正在连接 %1:%2 ...").arg(m_currAmp2Cfg.ip).arg(m_currAmp2Cfg.port));
+    m_ampSocket2->connectToHost(m_currAmp2Cfg.ip, m_currAmp2Cfg.port);
     // ============================================================
 
     log("[DeviceManager] 就绪");
@@ -463,44 +468,39 @@ void DeviceManager::setManualDirection(SpoofDirection dir)
 void DeviceManager::onAmpError(QAbstractSocket::SocketError error)
 {
     Q_UNUSED(error);
-    log(QString("[功放] 连接错误: %1").arg(m_ampSocket->errorString()));
+    log(QString("[功放1] 连接错误: %1").arg(m_ampSocket->errorString()));
+}
 
-    // 如果需要自动重连逻辑，可以在这里加
-    // m_ampSocket->connectToHost(m_currAmpCfg.ip, m_currAmpCfg.port);
+void DeviceManager::onAmp2Error(QAbstractSocket::SocketError error)
+{
+    Q_UNUSED(error);
+    log(QString("[功放2] 连接错误: %1").arg(m_ampSocket2->errorString()));
 }
 
 // ============================================================================
-// 【新增】功放控制核心函数
+// 【新增】功放控制核心函数：对两路功放都发开/关指令（仅手动干扰开/关与整机复位时调用）
 // ============================================================================
 void DeviceManager::controlAmp(bool open)
 {
-    // 1. 检查连接状态，如果没连上尝试连一下 (尽力而为)
-    if (m_ampSocket->state() != QAbstractSocket::ConnectedState) {
-        m_ampSocket->connectToHost(m_currAmpCfg.ip, m_currAmpCfg.port);
-        // 注意：TCP连接是异步的，这里直接 write 可能会失败，但在 UI 频繁操作下下次可能会好
-        // 如果对时序要求极高，需要等待 connected 信号。
-        // 这里假设连接已经建立保持长连接。
-    }
-
-    // 2. 构造协议
-    QByteArray cmd;
+    QByteArray cmd = open ? QByteArray::fromHex("AA0101BB") : QByteArray::fromHex("AA0100BB");
     if (open) {
-        // 开启: AA 01 01 BB
-        cmd = QByteArray::fromHex("AA0101BB");
-        log("[指令] 功放开启 (AA 01 01 BB)");
+        log("[指令] 功放开启 (AA 01 01 BB) -> 两路");
     } else {
-        // 关闭: AA 01 00 BB
-        cmd = QByteArray::fromHex("AA0100BB");
-        log("[指令] 功放关闭 (AA 01 00 BB)");
+        log("[指令] 功放关闭 (AA 01 00 BB) -> 两路");
     }
 
-    // 3. 发送
-    if (m_ampSocket->state() == QAbstractSocket::ConnectedState) {
-        m_ampSocket->write(cmd);
-        m_ampSocket->flush();
-    } else {
-        log("[警告] 功放未连接，指令发送失败!");
-    }
+    auto sendToSocket = [this, &cmd](QTcpSocket *socket, const NetConfig &cfg, const QString &label) {
+        if (socket->state() != QAbstractSocket::ConnectedState) {
+            socket->connectToHost(cfg.ip, cfg.port);
+            log(QString("[警告] %1 未连接，指令未发送 (已尝试重连)").arg(label));
+            return;
+        }
+        socket->write(cmd);
+        socket->flush();
+    };
+
+    sendToSocket(m_ampSocket,  m_currAmpCfg,  "功放1");
+    sendToSocket(m_ampSocket2, m_currAmp2Cfg, "功放2");
 }
 
 void DeviceManager::setJammerConfig(const QList<JammerConfigData> &configs) { if(m_jammerDriver) m_jammerDriver->setWriteFreq(configs); }

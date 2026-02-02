@@ -19,6 +19,11 @@ const int     DEFAULT_JAMMER_PORT= 8090;
 
 const QString DEFAULT_RELAY_IP   = "127.0.0.1";
 const int     DEFAULT_RELAY_PORT = 2000;
+
+const QString DEFAULT_AMP_IP    = "127.0.0.1";
+const int     DEFAULT_AMP_PORT  = 4196;
+const QString DEFAULT_AMP2_IP   = "127.0.0.1";
+const int     DEFAULT_AMP2_PORT = 4197;
 #else
 // === 真实硬件默认配置 ===
 
@@ -38,9 +43,11 @@ const int     DEFAULT_JAMMER_PORT= 8090;
 const QString DEFAULT_RELAY_IP   = "192.168.10.221";
 const int     DEFAULT_RELAY_PORT = 4196;
 
-// 5. 功放控制 (AmpDevice) - 伴随写频干扰使用
+// 5. 功放控制 (AmpDevice / AmpDevice2) - 写频开启前对两路功放发开启，关闭时发关闭
 const QString DEFAULT_AMP_IP     = "192.168.1.253";
-const int     DEFAULT_AMP_PORT   = 4196; // 端口与继电器相同，但IP不同
+const int     DEFAULT_AMP_PORT   = 4196;
+const QString DEFAULT_AMP2_IP   = "192.168.1.153";
+const int     DEFAULT_AMP2_PORT  = 4196;
 #endif
 
 // 基站经纬度
