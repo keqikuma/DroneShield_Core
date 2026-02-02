@@ -40,6 +40,9 @@ void ConfigLoader::initDefaults()
     // 4. 继电器
     m_relay = loadOrSet("RelayDevice", Config::DEFAULT_RELAY_IP, Config::DEFAULT_RELAY_PORT);
 
+    // 5. 功放 (新增)
+    m_amp = loadOrSet("AmpDevice", Config::DEFAULT_AMP_IP, Config::DEFAULT_AMP_PORT);
+
     settings.sync(); // 确保写入磁盘
 
     qDebug() << "[Config] 配置加载完毕 -> " << configPath;
@@ -47,9 +50,11 @@ void ConfigLoader::initDefaults()
     qDebug() << "  Detect:" << m_detect.ip << ":" << m_detect.port;
     qDebug() << "  Jammer:" << m_jammer.ip << ":" << m_jammer.port;
     qDebug() << "  Relay :" << m_relay.ip << ":" << m_relay.port;
+    qDebug() << "  Amp   :" << m_amp.ip << ":" << m_amp.port;
 }
 
 NetConfig ConfigLoader::getSpoofConfig() const { return m_spoof; }
 NetConfig ConfigLoader::getDetectConfig() const { return m_detect; }
 NetConfig ConfigLoader::getJammerConfig() const { return m_jammer; }
 NetConfig ConfigLoader::getRelayConfig() const { return m_relay; }
+NetConfig ConfigLoader::getAmpConfig() const { return m_amp; }

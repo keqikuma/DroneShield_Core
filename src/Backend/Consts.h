@@ -37,6 +37,10 @@ const int     DEFAULT_JAMMER_PORT= 8090;
 // 4. 压制继电器 (TCP)
 const QString DEFAULT_RELAY_IP   = "192.168.10.221";
 const int     DEFAULT_RELAY_PORT = 4196;
+
+// 5. 功放控制 (AmpDevice) - 伴随写频干扰使用
+const QString DEFAULT_AMP_IP     = "192.168.1.253";
+const int     DEFAULT_AMP_PORT   = 4196; // 端口与继电器相同，但IP不同
 #endif
 
 // 基站经纬度

@@ -57,6 +57,12 @@ private slots:
     void onAutoCycleTimeout();     // 10秒到了，暂停一下
     void onObservationTimeout();   // 观察结束，决定是否继续
 
+    // 【新增】辅助函数：控制功放开关
+    void controlAmp(bool open);
+
+    // 【新增】功放连接错误处理
+    void onAmpError(QAbstractSocket::SocketError error);
+
 private:
     // 核心决策函数
     void processDecision(bool hasThreat, double distance);
@@ -98,6 +104,10 @@ private:
     QTimer *m_observationTimer;    // 2秒观察定时器 (暂停后等待数据刷新)
 
     bool m_isInObservationMode = false; // 标记当前是否处于"暂停观察"阶段
+
+    // 【新增】功放控制专用 Socket 和配置
+    QTcpSocket *m_ampSocket;
+    NetConfig m_currAmpCfg;
 
 signals:
     void sigLogMessage(const QString &msg);
