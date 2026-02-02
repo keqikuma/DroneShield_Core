@@ -8,93 +8,51 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    
+    // 设置全局样式
     a.setStyleSheet(getDarkTacticalStyle());
 
-    MainWindow w;
-    w.show();
-
-    // 创建后端核心管理器
+    // 1. 先创建后端核心管理器 (DeviceManager)
+    // 此时不指定父对象，因为它需要在 MainWindow 之前存在
     DeviceManager *systemCore = new DeviceManager();
 
-    // =======================================================
-    // 1. 下行信号：后端 -> UI (数据展示)
-    // =======================================================
+    // 2. 创建主窗口 (MainWindow)，并将核心管理器通过构造函数注入
+    MainWindow w(systemCore);
 
-    // 日志
-    QObject::connect(systemCore, &DeviceManager::sigLogMessage,
-                     &w, &MainWindow::slotUpdateLog);
-
-    // 【修复】无人机列表 (旧代码是 slotUpdateTargets，已删除，改为 slotUpdateDroneList)
-    QObject::connect(systemCore, &DeviceManager::sigDroneList,
-                     &w, &MainWindow::slotUpdateDroneList);
-
-    // 【新增】图传/频谱列表
-    QObject::connect(systemCore, &DeviceManager::sigImageList,
-                     &w, &MainWindow::slotUpdateImageList);
-
-    // 【新增】告警数量 (右上角红点)
-    QObject::connect(systemCore, &DeviceManager::sigAlertCount,
-                     &w, &MainWindow::slotUpdateAlertCount);
-
-    // 【新增】设备自身定位 (给雷达用)
-    QObject::connect(systemCore, &DeviceManager::sigSelfPosition,
-                     &w, &MainWindow::slotUpdateDevicePos);
-
+    // 3. 建立生命周期绑定
+    // 将 systemCore 的父对象设为 w，这样当窗口 w 销毁时，systemCore 也会被自动 delete
+    systemCore->setParent(&w);
 
     // =======================================================
-    // 2. 上行信号：UI -> 后端 (控制指令)
+    // 注意：
+    // 1. 下行信号 (后端数据->UI) 已在 MainWindow 的 initConnections 中通过 m_deviceManager 连接
+    // 2. 上行信号 (UI指令->后端) 建议也迁移至 MainWindow 内部连接，
+    //    或者在此处保留必要的全局指令绑定。
     // =======================================================
 
-    // 2.1 自动/手动模式切换
+    // 如果你希望在 main 中保留上行控制信号的显式连接（匹配原代码逻辑）：
     QObject::connect(&w, &MainWindow::sigSetAutoMode, systemCore, [systemCore](bool enable){
         systemCore->setSystemMode(enable ? SystemMode::Auto : SystemMode::Manual);
     });
+    QObject::connect(&w, &MainWindow::sigConfigJammer, systemCore, &DeviceManager::setJammerConfig);
+    QObject::connect(&w, &MainWindow::sigManualJam, systemCore, &DeviceManager::setManualJammer);
+    QObject::connect(&w, &MainWindow::sigControlRelayChannel, systemCore, &DeviceManager::setRelayChannel);
+    QObject::connect(&w, &MainWindow::sigControlRelayAll, systemCore, &DeviceManager::setRelayAll);
+    QObject::connect(&w, &MainWindow::sigManualSpoof, systemCore, &DeviceManager::setManualSpoofSwitch);
+    QObject::connect(&w, &MainWindow::sigManualSpoofCircle, systemCore, &DeviceManager::setManualCircular);
+    
+    // 定向诱骗方向快捷连接
+    QObject::connect(&w, &MainWindow::sigManualSpoofNorth, systemCore, [systemCore](){ systemCore->setManualDirection(SpoofDirection::North); });
+    QObject::connect(&w, &MainWindow::sigManualSpoofEast,  systemCore, [systemCore](){ systemCore->setManualDirection(SpoofDirection::East); });
+    QObject::connect(&w, &MainWindow::sigManualSpoofSouth, systemCore, [systemCore](){ systemCore->setManualDirection(SpoofDirection::South); });
+    QObject::connect(&w, &MainWindow::sigManualSpoofWest,  systemCore, [systemCore](){ systemCore->setManualDirection(SpoofDirection::West); });
 
-    // 2.2 手动干扰 (Linux)
-    QObject::connect(&w, &MainWindow::sigConfigJammer,
-                     systemCore, &DeviceManager::setJammerConfig);
-    QObject::connect(&w, &MainWindow::sigManualJam,
-                     systemCore, &DeviceManager::setManualJammer);
+    // 显示窗口
+    w.show();
 
-    // 2.3 信号压制 (Relay)
-    QObject::connect(&w, &MainWindow::sigControlRelayChannel,
-                     systemCore, &DeviceManager::setRelayChannel);
-    QObject::connect(&w, &MainWindow::sigControlRelayAll,
-                     systemCore, &DeviceManager::setRelayAll);
-
-    // 2.4 手动诱骗 (总开关 - 主要用于停止)
-    QObject::connect(&w, &MainWindow::sigManualSpoof,
-                     systemCore, &DeviceManager::setManualSpoofSwitch);
-
-    // 2.5 手动诱骗模式具体指令
-    // 圆周驱离
-    QObject::connect(&w, &MainWindow::sigManualSpoofCircle,
-                     systemCore, &DeviceManager::setManualCircular);
-
-    // 定向驱离：北
-    QObject::connect(&w, &MainWindow::sigManualSpoofNorth, systemCore, [systemCore](){
-        systemCore->setManualDirection(SpoofDirection::North);
-    });
-
-    // 定向驱离：东
-    QObject::connect(&w, &MainWindow::sigManualSpoofEast, systemCore, [systemCore](){
-        systemCore->setManualDirection(SpoofDirection::East);
-    });
-
-    // 定向驱离：南
-    QObject::connect(&w, &MainWindow::sigManualSpoofSouth, systemCore, [systemCore](){
-        systemCore->setManualDirection(SpoofDirection::South);
-    });
-
-    // 定向驱离：西
-    QObject::connect(&w, &MainWindow::sigManualSpoofWest, systemCore, [systemCore](){
-        systemCore->setManualDirection(SpoofDirection::West);
-    });
-
-    // =======================================================
-
-    w.slotUpdateLog("系统核心已加载，正在连接侦测节点...");
-    w.slotUpdateLog("等待 SocketIO 数据流...");
+    // 初始日志输出
+    w.slotUpdateLog("系统核心已加载（单例注入模式）...");
+    w.slotUpdateLog("正在初始化底层硬件驱动...");
 
     return a.exec();
 }
