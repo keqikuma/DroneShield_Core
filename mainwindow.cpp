@@ -99,9 +99,10 @@ QWidget* MainWindow::createImageCard(const ImageInfo &info) {
 // ============================================================================
 // 主窗口构造
 // ============================================================================
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(DeviceManager *manager, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , m_deviceManager(manager)
 {
     ui->setupUi(this);
 
@@ -221,7 +222,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->gridLayout_Main->addWidget(rightPanel, 0, 2, 2, 1);
 
     // 5. 初始化
-    m_deviceManager = new DeviceManager(this);
+    // m_deviceManager = new DeviceManager(this);
 
     m_uiTimer = new QTimer(this);
     m_uiTimer->setInterval(500);

@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     w.show();
 
     // 创建后端核心管理器
-    DeviceManager *systemCore = new DeviceManager(&w);
+    DeviceManager *systemCore = new DeviceManager();
 
     // =======================================================
     // 1. 下行信号：后端 -> UI (数据展示)

@@ -33,7 +33,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    MainWindow(DeviceManager *manager, QWidget *parent = nullptr);
     ~MainWindow();
 
 public slots:
