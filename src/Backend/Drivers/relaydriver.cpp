@@ -4,6 +4,8 @@
 RelayDriver::RelayDriver(QObject *parent) : QObject(parent)
 {
     m_socket = new QTcpSocket(this);
+    // 关闭 Nagle，确保小包（如 13 字节全开指令）立即以单包发出，避免分包导致设备只解析到前几个字节
+    m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
     connect(m_socket, &QTcpSocket::connected, this, &RelayDriver::onConnected);
     connect(m_socket, &QTcpSocket::disconnected, this, &RelayDriver::onDisconnected);
@@ -71,12 +73,15 @@ void RelayDriver::sendCommand(const QByteArray &data)
         // 尝试自动重连
         m_socket->connectToHost(m_targetIp, m_targetPort);
         emit sigLog("[压制] 发送失败: 未连接 (尝试重连...)");
-        // 这里也可以 emit sigError，但通常依靠 socket 自身的 errorOccurred 就够了
         return;
     }
 
     m_socket->write(data);
     m_socket->flush();
+    // 等待本帧数据真正写入 socket，避免协议被拆包或未发完就返回导致只开部分继电器
+    if (!m_socket->waitForBytesWritten(1000)) {
+        emit sigLog(QString("[压制] 写入超时或未完成，已写: %1 字节").arg(data.size()));
+    }
 }
 
 // ============================================================================
@@ -95,15 +100,15 @@ void RelayDriver::setAll(bool on)
         emit sigLog("[指令] 压制全关 (All OFF)");
     }
 
-    // 调试日志
-    qDebug() << "------------------------------------------------";
-    qDebug() << "[Relay Check] 计划发送:" << cmd.toHex().toUpper();
-    qDebug() << "[Relay Check] 字节长度:" << cmd.size();
-    qDebug() << "------------------------------------------------";
-
-    if (!cmd.isEmpty()) {
-        sendCommand(cmd);
+    // 全开/全关协议固定 13 字节，长度不对说明 hex 串有误
+    const int kAllCmdLen = 13;
+    if (cmd.size() != kAllCmdLen) {
+        emit sigLog(QString("[压制] 全开/全关指令长度错误: 期望 %1 字节，实际 %2").arg(kAllCmdLen).arg(cmd.size()));
+        return;
     }
+
+    qDebug() << "[Relay] 全" << (on ? "开" : "关") << "指令:" << cmd.toHex(' ').toUpper() << "长度:" << cmd.size();
+    sendCommand(cmd);
 }
 
 // ============================================================================
