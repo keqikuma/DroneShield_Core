@@ -46,15 +46,22 @@ void RelayDialog::setupUi()
     hbox->addWidget(btnAllOff);
     mainLayout->addWidget(grpMaster);
 
-    // 连接总控
+    // 连接总控：只发一条全开/全关指令，避免勾选框 setChecked 触发 7 次单路指令
     connect(btnAllOn, &QPushButton::clicked, this, [this](){
-        // 将所有勾选框设为 true，并发送全开指令
-        for(auto c : m_checks) c->setChecked(true);
+        for (QCheckBox *c : m_checks) {
+            c->blockSignals(true);
+            c->setChecked(true);
+            c->blockSignals(false);
+        }
         emit sigControlAll(true);
     });
 
     connect(btnAllOff, &QPushButton::clicked, this, [this](){
-        for(auto c : m_checks) c->setChecked(false);
+        for (QCheckBox *c : m_checks) {
+            c->blockSignals(true);
+            c->setChecked(false);
+            c->blockSignals(false);
+        }
         emit sigControlAll(false);
     });
 }
