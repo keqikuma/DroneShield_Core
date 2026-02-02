@@ -140,6 +140,16 @@ MainWindow::MainWindow(QWidget *parent)
     ui->verticalLayout_3->removeWidget(ui->label_SystemStatus);
     ui->label_SystemStatus->setParent(headerWidget);
     headerTopLayout->addWidget(ui->label_SystemStatus);
+
+    // ============================================================
+    // 【新增】实时坐标显示标签
+    // ============================================================
+    m_lblLocation = new QLabel("基站: 0.000000, 0.000000", this);
+    // 使用青色 (#00FFFF) 和等宽字体 (Consolas)，方便看数字跳动
+    m_lblLocation->setStyleSheet("color: #00FFFF; font-family: Consolas; font-weight: bold; font-size: 14px; margin-left: 20px;");
+    headerTopLayout->addWidget(m_lblLocation);
+    // ============================================================
+
     headerTopLayout->addStretch();
 
     QLabel *lblAuto = new QLabel("自动接管模式", this);
@@ -348,6 +358,17 @@ void MainWindow::slotUpdateAlertCount(int count)
 void MainWindow::slotUpdateDevicePos(double lat, double lng)
 {
     if (m_radar) m_radar->setCenterPosition(lat, lng);
+
+    // ============================================================
+    // 【新增】实时更新界面文字
+    // ============================================================
+    if (m_lblLocation) {
+        // 保留 6 位小数，确保高精度显示
+        QString posStr = QString("基站: %1, %2")
+                             .arg(lat, 0, 'f', 6)
+                             .arg(lng, 0, 'f', 6);
+        m_lblLocation->setText(posStr);
+    }
 }
 
 // ============================================================================

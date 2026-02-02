@@ -7,7 +7,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network WebSockets)
 qt_standard_project_setup()
 
 # 2. 模拟模式宏定义 (连接真实硬件时请注释掉此行)
-add_compile_definitions(SIMULATION_MODE)
+# add_compile_definitions(SIMULATION_MODE)
 
 qt_add_executable(DroneShield_Core
     WIN32 MACOSX_BUNDLE
@@ -59,6 +59,7 @@ qt_add_executable(DroneShield_Core
     src/UI/relaydialog.h src/UI/relaydialog.cpp
     src/UI/toggleswitch.h src/UI/toggleswitch.cpp
     src/Backend/DataStructs.h
+    src/Backend/coordinatemanager.h src/Backend/coordinatemanager.cpp
 )
 
 target_link_libraries(DroneShield_Core

@@ -20,10 +20,13 @@ public:
     void setChannel(int channel, bool on); // 单通道控制
 
 signals:
-    // 【新增】日志信号
+    // 日志信号
     void sigLog(const QString &msg);
-    // 连接状态信号 (可选)
+    // 连接状态信号
     void sigConnected(bool isConnected);
+
+    // 【新增】错误信号 (用于触发 DeviceManager 的回退逻辑)
+    void sigError(QAbstractSocket::SocketError error);
 
 private slots:
     void onConnected();

@@ -4,12 +4,16 @@
 #include <QObject>
 #include <QDebug>
 #include <QTimer>
+#include <QAbstractSocket> // 用于 SocketError
+#include <QtMath>
 
 #include "DataStructs.h"
 #include "Drivers/spoofdriver.h"
 #include "Drivers/detectiondriver.h"
 #include "Drivers/jammerdriver.h"
 #include "Drivers/relaydriver.h"
+#include "../Utils/configloader.h" // 【新增】引入配置加载器
+#include "coordinatemanager.h"
 
 enum class SystemMode {
     Manual,
@@ -26,7 +30,7 @@ public:
     void setSystemMode(SystemMode mode);
     void stopAllBusiness();
 
-    // 手动控制
+    // 手动控制接口
     void setManualSpoofSwitch(bool enable);
     void setManualCircular();
     void setManualDirection(SpoofDirection dir);
@@ -36,16 +40,26 @@ public:
     void setRelayAll(bool on);
 
 private slots:
-    // 数据接收槽
+    // --- 数据接收槽 ---
     void onDroneListUpdated(const QList<DroneInfo> &drones);
-    void onImageListUpdated(const QList<ImageInfo> &images); // 【新增】图传也能触发
+    void onImageListUpdated(const QList<ImageInfo> &images);
     void onAlertCountUpdated(int count);
     void onDevicePositionUpdated(double lat, double lng);
+
+    // --- 逻辑槽 ---
     void onStopDefenseTimeout();
+
+    // --- 【新增】故障回退槽 ---
+    void onRelayError(QAbstractSocket::SocketError error); // 继电器连接失败
+    void onDetectDisconnected();                           // 侦测断开
+
+    // 【新增】自动循环逻辑槽
+    void onAutoCycleTimeout();     // 10秒到了，暂停一下
+    void onObservationTimeout();   // 观察结束，决定是否继续
 
 private:
     // 核心决策函数
-    void processDecision(bool hasThreat, double minDistance);
+    void processDecision(bool hasThreat, double distance);
     void log(const QString &msg);
 
     SpoofDriver *m_spoofDriver;
@@ -60,11 +74,30 @@ private:
     bool m_isAutoSpoofingRunning;
     bool m_isRelaySuppressionRunning;
 
-    // 辅助：记录上一次是否有图传威胁（用于合并判断）
+    // 【新增】记录手动诱骗状态，用于坐标锁定
+    bool m_isManualSpoofing = false;
+
+    // 辅助：记录上一次是否有图传威胁
     bool m_hasImageThreat;
 
-    double m_baseLat = 0.0; // 动态获取的基站纬度
-    double m_baseLng = 0.0; // 动态获取的基站经度
+    // 动态获取的基站经纬度
+    double m_baseLat = 0.0;
+    double m_baseLng = 0.0;
+
+    // --- 【新增】配置与回退管理 ---
+    NetConfig m_currDetectCfg;  // 当前侦测配置
+    NetConfig m_currRelayCfg;   // 当前继电器配置
+    bool m_detectFallbackUsed = false; // 是否已回退过
+    bool m_relayFallbackUsed = false;  // 是否已回退过
+
+    // 【新增】坐标管理器
+    CoordinateManager *m_coordManager;
+
+    // 【新增】自动模式循环定时器
+    QTimer *m_autoCycleTimer;      // 10秒工作定时器
+    QTimer *m_observationTimer;    // 2秒观察定时器 (暂停后等待数据刷新)
+
+    bool m_isInObservationMode = false; // 标记当前是否处于"暂停观察"阶段
 
 signals:
     void sigLogMessage(const QString &msg);

@@ -71,6 +71,9 @@ private:
     ToggleSwitch *m_autoSwitch;
     DeviceManager *m_deviceManager;
 
+    // 【新增】用于显示实时基站坐标的标签
+    QLabel *m_lblLocation;
+
     // === 左侧面板控件 ===
     QStackedWidget *m_leftStack;
 

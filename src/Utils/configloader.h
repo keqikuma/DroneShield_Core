@@ -5,20 +5,30 @@
 #include <QSettings>
 #include <QString>
 
+struct NetConfig {
+    QString ip;
+    int port;
+};
+
 class ConfigLoader : public QObject
 {
     Q_OBJECT
 public:
     explicit ConfigLoader(QObject *parent = nullptr);
 
-    // 读取配置
-    QString getSpoofIp() const;
-    int getSpoofPort() const;
+    // 获取各设备配置
+    NetConfig getSpoofConfig() const;
+    NetConfig getDetectConfig() const;
+    NetConfig getJammerConfig() const;
+    NetConfig getRelayConfig() const;
 
 private:
-    void initDefaults(); // 如果文件不存在，写入默认值
-    QString m_spoofIp;
-    int m_spoofPort;
+    void initDefaults(); // 初始化/读取配置
+
+    NetConfig m_spoof;
+    NetConfig m_detect;
+    NetConfig m_jammer;
+    NetConfig m_relay;
 };
 
 #endif // CONFIGLOADER_H

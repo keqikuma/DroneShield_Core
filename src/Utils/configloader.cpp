@@ -4,8 +4,7 @@
 #include <QDebug>
 #include <QFile>
 
-ConfigLoader::ConfigLoader(QObject *parent)
-    : QObject{parent}
+ConfigLoader::ConfigLoader(QObject *parent) : QObject{parent}
 {
     initDefaults();
 }
@@ -14,30 +13,43 @@ void ConfigLoader::initDefaults()
 {
     // 配置文件路径: 运行目录/config.ini
     QString configPath = QCoreApplication::applicationDirPath() + "/config.ini";
-
     QSettings settings(configPath, QSettings::IniFormat);
 
-    // 检查是否存在 [SpoofDevice] 组，如果不存在则写入默认值
-    if (!settings.contains("SpoofDevice/IP")) {
-        qDebug() << "[Config] 配置文件不存在或缺失，创建默认配置 -> " << configPath;
-        settings.setValue("SpoofDevice/IP", Config::DEFAULT_SPOOF_IP);
-        settings.setValue("SpoofDevice/Port", Config::DEFAULT_SPOOF_PORT);
-        settings.sync(); // 强制写入磁盘
-    }
+    // 辅助 Lambda：读取配置，如果不存在则写入默认值
+    auto loadOrSet = [&](const QString &group, const QString &defIp, int defPort) -> NetConfig {
+        settings.beginGroup(group);
+        if (!settings.contains("IP")) settings.setValue("IP", defIp);
+        if (!settings.contains("Port")) settings.setValue("Port", defPort);
 
-    // 读取配置到内存
-    m_spoofIp = settings.value("SpoofDevice/IP", Config::DEFAULT_SPOOF_IP).toString();
-    m_spoofPort = settings.value("SpoofDevice/Port", Config::DEFAULT_SPOOF_PORT).toInt();
+        NetConfig cfg;
+        cfg.ip = settings.value("IP", defIp).toString();
+        cfg.port = settings.value("Port", defPort).toInt();
+        settings.endGroup();
+        return cfg;
+    };
 
-    qDebug() << "[Config] 加载诱骗设备配置 IP:" << m_spoofIp << " Port:" << m_spoofPort;
+    // 1. 诱骗
+    m_spoof = loadOrSet("SpoofDevice", Config::DEFAULT_SPOOF_IP, Config::DEFAULT_SPOOF_PORT);
+
+    // 2. 侦测
+    m_detect = loadOrSet("DetectionDevice", Config::DEFAULT_DETECT_IP, Config::DEFAULT_DETECT_PORT);
+
+    // 3. 干扰
+    m_jammer = loadOrSet("JammerDevice", Config::DEFAULT_JAMMER_IP, Config::DEFAULT_JAMMER_PORT);
+
+    // 4. 继电器
+    m_relay = loadOrSet("RelayDevice", Config::DEFAULT_RELAY_IP, Config::DEFAULT_RELAY_PORT);
+
+    settings.sync(); // 确保写入磁盘
+
+    qDebug() << "[Config] 配置加载完毕 -> " << configPath;
+    qDebug() << "  Spoof :" << m_spoof.ip << ":" << m_spoof.port;
+    qDebug() << "  Detect:" << m_detect.ip << ":" << m_detect.port;
+    qDebug() << "  Jammer:" << m_jammer.ip << ":" << m_jammer.port;
+    qDebug() << "  Relay :" << m_relay.ip << ":" << m_relay.port;
 }
 
-QString ConfigLoader::getSpoofIp() const
-{
-    return m_spoofIp;
-}
-
-int ConfigLoader::getSpoofPort() const
-{
-    return m_spoofPort;
-}
+NetConfig ConfigLoader::getSpoofConfig() const { return m_spoof; }
+NetConfig ConfigLoader::getDetectConfig() const { return m_detect; }
+NetConfig ConfigLoader::getJammerConfig() const { return m_jammer; }
+NetConfig ConfigLoader::getRelayConfig() const { return m_relay; }
