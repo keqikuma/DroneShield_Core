@@ -19,8 +19,10 @@ void RelayDialog::setupUi()
     QGroupBox *grpSingle = new QGroupBox("单频段控制 (手动)", this);
     QGridLayout *grid = new QGridLayout(grpSingle);
 
+    static const char* channelNames[] = { "433", "2.4GMHz", "5.8", "5.2", "1.2", "9.5", "1.5" };
     for (int i = 1; i <= 7; ++i) {
-        QCheckBox *chk = new QCheckBox(QString("通道 %1").arg(i), this);
+        QString label = QString("通道 %1 (%2)").arg(i).arg(channelNames[i - 1]);
+        QCheckBox *chk = new QCheckBox(label, this);
         m_checks.append(chk);
         // 布局：每行放 3 个
         grid->addWidget(chk, (i-1)/3, (i-1)%3);

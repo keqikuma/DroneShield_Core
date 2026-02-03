@@ -26,6 +26,8 @@ public:
     // 获取用户配置
     QList<JammerBoardConfig> getConfigs() const;
 
+    void accept() override;
+
 private:
     void setupUi();
 

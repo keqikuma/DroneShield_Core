@@ -1,5 +1,6 @@
 #include "jammerconfdialog.h"
 #include <QFormLayout>
+#include <QSettings>
 
 JammerConfigDialog::JammerConfigDialog(QWidget *parent) : QDialog(parent)
 {
@@ -49,6 +50,33 @@ void JammerConfigDialog::setupUi()
     connect(btnBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(btnBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     mainLayout->addWidget(btnBox);
+
+    // 记忆：恢复上次的 start/end freq 与启用状态
+    QSettings s;
+    if (s.contains("JammerConfig/Board1Start")) {
+        m_editStart1->setText(s.value("JammerConfig/Board1Start").toString());
+        m_editEnd1->setText(s.value("JammerConfig/Board1End").toString());
+    }
+    if (s.contains("JammerConfig/Board2Start")) {
+        m_editStart2->setText(s.value("JammerConfig/Board2Start").toString());
+        m_editEnd2->setText(s.value("JammerConfig/Board2End").toString());
+    }
+    if (s.contains("JammerConfig/Board1Enabled"))
+        m_chkBoard1->setChecked(s.value("JammerConfig/Board1Enabled").toBool());
+    if (s.contains("JammerConfig/Board2Enabled"))
+        m_chkBoard2->setChecked(s.value("JammerConfig/Board2Enabled").toBool());
+}
+
+void JammerConfigDialog::accept()
+{
+    QSettings s;
+    s.setValue("JammerConfig/Board1Start", m_editStart1->text().trimmed());
+    s.setValue("JammerConfig/Board1End", m_editEnd1->text().trimmed());
+    s.setValue("JammerConfig/Board2Start", m_editStart2->text().trimmed());
+    s.setValue("JammerConfig/Board2End", m_editEnd2->text().trimmed());
+    s.setValue("JammerConfig/Board1Enabled", m_chkBoard1->isChecked());
+    s.setValue("JammerConfig/Board2Enabled", m_chkBoard2->isChecked());
+    QDialog::accept();
 }
 
 QList<JammerBoardConfig> JammerConfigDialog::getConfigs() const
