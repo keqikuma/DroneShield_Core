@@ -4,7 +4,7 @@
 RelayDriver::RelayDriver(QObject *parent) : QObject(parent)
 {
     m_socket = new QTcpSocket(this);
-    // 关闭 Nagle，确保小包（如 13 字节全开指令）立即以单包发出，避免分包导致设备只解析到前几个字节
+    // 关闭 Nagle，确保小包（如 11 字节全开指令）立即以单包发出，避免分包导致设备只解析到前几个字节
     m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
     connect(m_socket, &QTcpSocket::connected, this, &RelayDriver::onConnected);
@@ -85,23 +85,22 @@ void RelayDriver::sendCommand(const QByteArray &data)
 }
 
 // ============================================================================
-// 全开 / 全关
+// 全开 / 全关（工程师协议：11 字节）
 // ============================================================================
 void RelayDriver::setAll(bool on)
 {
     QByteArray cmd;
     if (on) {
-        // 全开指令: FE 0F ... F6 0B
-        cmd = QByteArray::fromHex("FE0F0000002004FFFFFFFFF60B");
+        // 全开: FE 0F 00 00 00 10 02 FF FF A6 64
+        cmd = QByteArray::fromHex("FE0F0000001002FFFFA664");
         emit sigLog("[指令] 压制全开 (All ON)");
     } else {
-        // 全关指令: FE 0F ... F7 9F
-        cmd = QByteArray::fromHex("FE0F000000200400000000F79F");
+        // 全关: FE 0F 00 00 00 10 02 00 00 A7 D4
+        cmd = QByteArray::fromHex("FE0F00000010020000A7D4");
         emit sigLog("[指令] 压制全关 (All OFF)");
     }
 
-    // 全开/全关协议固定 13 字节，长度不对说明 hex 串有误
-    const int kAllCmdLen = 13;
+    const int kAllCmdLen = 11;
     if (cmd.size() != kAllCmdLen) {
         emit sigLog(QString("[压制] 全开/全关指令长度错误: 期望 %1 字节，实际 %2").arg(kAllCmdLen).arg(cmd.size()));
         return;
@@ -112,20 +111,20 @@ void RelayDriver::setAll(bool on)
 }
 
 // ============================================================================
-// 单路控制 (1-7路)
+// 单路控制：通道 1=433, 2=915, 3=1.2, 4=1.5, 5=2.4, 6=5.2, 7=5.8（工程师表格）
 // ============================================================================
 void RelayDriver::setChannel(int channel, bool on)
 {
     QString hexStr;
 
     switch (channel) {
-    case 1: hexStr = on ? "FE050000FF009835" : "FE0500000000D9C5"; break;
-    case 2: hexStr = on ? "FE050001FF00C9F5" : "FE05000100008805"; break;
-    case 3: hexStr = on ? "FE050002FF0039F5" : "FE05000200007805"; break;
-    case 4: hexStr = on ? "FE050003FF006835" : "FE050003000029C5"; break;
-    case 5: hexStr = on ? "FE050004FF00D9F4" : "FE05000400009804"; break;
-    case 6: hexStr = on ? "FE050005FF008834" : "FE0500050000C9C4"; break;
-    case 7: hexStr = on ? "FE050006FF007834" : "FE050006000039C4"; break;
+    case 1: hexStr = on ? "FE050007FF0029F4" : "FE05000700006804"; break; // 433
+    case 2: hexStr = on ? "FE050001FF00C9F5" : "FE05000100008805"; break; // 915
+    case 3: hexStr = on ? "FE050002FF0039F5" : "FE05000200007805"; break; // 1.2
+    case 4: hexStr = on ? "FE050003FF006835" : "FE050003000029C5"; break; // 1.5
+    case 5: hexStr = on ? "FE050004FF00D9F4" : "FE05000400009804"; break; // 2.4
+    case 6: hexStr = on ? "FE050005FF008834" : "FE0500050000C9C4"; break; // 5.2
+    case 7: hexStr = on ? "FE050006FF007834" : "FE050006000039C4"; break; // 5.8
     default:
         emit sigLog(QString("[压制] 错误: 不支持的通道 %1 (仅支持 1-7)").arg(channel));
         return;
